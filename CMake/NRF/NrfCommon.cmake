@@ -3,7 +3,7 @@ include(Toolchain/arm-none-eabi)
 set(MCU_ARCH cortex-m4)
 
 set(COMMON_COMPILE_FLAGS -mcpu=${MCU_ARCH} -mthumb -mfloat-abi=hard -mfpu=fpv4-sp-d16)
-set(C_CXX_COMPILE_FLAGS  -ffunction-sections -fdata-sections -fsigned-char -g -fmessage-length=0)
+set(C_CXX_COMPILE_FLAGS  -ffunction-sections -fdata-sections -fsigned-char -g -Og -fmessage-length=0)
 
 add_library(NRF INTERFACE IMPORTED)
 
@@ -33,5 +33,6 @@ target_compile_definitions(NRF INTERFACE
     CONFIG_GPIO_AS_PINRESET
     FLOAT_ABI_HARD
     FREERTOS
-    BOARD_PCA10056
+    USE_APP_CONFIG
+    #"__weak=__attribute__((weak))"
 )
