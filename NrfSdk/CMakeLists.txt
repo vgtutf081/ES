@@ -29,6 +29,12 @@ target_include_directories(${PROJECT_NAME}
         "${CMAKE_CURRENT_SOURCE_DIR}/integration/nrfx/legacy"
         "${CMAKE_CURRENT_SOURCE_DIR}/external/utf_converter"
         "${CMAKE_CURRENT_SOURCE_DIR}/config"
+        "${CMAKE_CURRENT_SOURCE_DIR}/nrf_macro"
+)
+
+target_sources(${PROJECT_NAME} 
+INTERFACE
+    nrf_macro/nrf_make_periph_instance.h
 )
 
 target_sources(${PROJECT_NAME} 

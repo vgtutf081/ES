@@ -7,7 +7,8 @@ target_include_directories(${LIBRARY_NAME}
         "${CMAKE_CURRENT_SOURCE_DIR}"
         "${CMAKE_CURRENT_SOURCE_DIR}/Gpio"
         "${CMAKE_CURRENT_SOURCE_DIR}/Uart"
-        "${CMAKE_CURRENT_SOURCE_DIR}/GsmModule"        
+        "${CMAKE_CURRENT_SOURCE_DIR}/GsmModule"
+        "${CMAKE_CURRENT_SOURCE_DIR}/Timer"        
 )
 
 #source
@@ -18,4 +19,7 @@ target_sources(${LIBRARY_NAME}
     ${CMAKE_CURRENT_SOURCE_DIR}/Gpio/GpioteNrf52.h
     ${CMAKE_CURRENT_SOURCE_DIR}/Uart/UarteNrf52.h
     ${CMAKE_CURRENT_SOURCE_DIR}/Gpio/GpioNrf52.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/GsmModule/SIM7600x.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/GsmModule/SIM7600x.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/Timer/TimerNrf52.h
 )
