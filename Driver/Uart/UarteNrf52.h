@@ -5,13 +5,15 @@
 #include "nrf_drv_common.h"
 #include <cstring>
 
+#include "ThreadFreeRtos.h"
+
 #include "PinMap.h"
 
 namespace ES::Driver::Uarte {
 
     class UarteNrf {
 		public:
-		UarteNrf(nrfx_uarte_t instance, uint32_t txPin, uint32_t rxPin, nrf_uarte_baudrate_t baudrate)  : _instance(instance), _txPin(_txPin), _rxPin(rxPin), _baudrate(baudrate) {
+		UarteNrf(nrfx_uarte_t instance, uint32_t txPin, uint32_t rxPin, nrf_uarte_baudrate_t baudrate)  : _instance(instance), _txPin(txPin), _rxPin(rxPin), _baudrate(baudrate) {
 
         }
 
@@ -40,12 +42,19 @@ namespace ES::Driver::Uarte {
             auto sendBuffer = reinterpret_cast<const uint8_t*>(dataPtr);
             memcpy(buf, dataPtr, length);
 			sendBuffer = buf;
+            while(nrfx_uarte_tx_in_progress(&_instance)) {
+                Threading::yield();
+            }
             err_code = nrfx_uarte_tx(&_instance, sendBuffer, length);
             return err_code;
         }
 
         ret_code_t getStream(uint8_t * dataPtr, size_t length) {
             return nrfx_uarte_rx(&_instance, dataPtr, length);
+        }
+
+        void stopStream() {
+            nrfx_uarte_rx_abort(&_instance);
         }
         			
         private:

@@ -35,6 +35,10 @@ namespace ES::Driver::Gpio {
             nrf_gpio_pin_clear(_portPin);
         }
 
+        void toggle() {
+            nrf_gpio_pin_toggle(_portPin);
+        }
+
     private:
         uint32_t _portPin;
     };
