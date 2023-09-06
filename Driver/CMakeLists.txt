@@ -9,17 +9,26 @@ target_include_directories(${LIBRARY_NAME}
         "${CMAKE_CURRENT_SOURCE_DIR}/Uart"
         "${CMAKE_CURRENT_SOURCE_DIR}/GsmModule"
         "${CMAKE_CURRENT_SOURCE_DIR}/Timer"        
+        "${CMAKE_CURRENT_SOURCE_DIR}/MotorControl" 
 )
 
 #source
 target_sources(${LIBRARY_NAME} 
     INTERFACE 
     ${CMAKE_CURRENT_SOURCE_DIR}/Uart/UarteNrf52.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/Gpio/Gpio.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/Gpio/GpioCh32Modes.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/Gpio/GpioCh32v.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/Gpio/GpioNrf52.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/Gpio/GpioNrfModes.h
     ${CMAKE_CURRENT_SOURCE_DIR}/Gpio/GpioteNrf52.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/Gpio/GpioteNrf52.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/Gpio/IGpio.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/MotorControl/DRV8328.h
     ${CMAKE_CURRENT_SOURCE_DIR}/Uart/UarteNrf52.h
-    ${CMAKE_CURRENT_SOURCE_DIR}/Gpio/GpioNrf52.h
     ${CMAKE_CURRENT_SOURCE_DIR}/GsmModule/SIM7600x.h
     ${CMAKE_CURRENT_SOURCE_DIR}/GsmModule/SIM7600x.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/Timer/TimerNrf52.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/Timer/TimerCh32.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/Timer/ITimer.h
 )
