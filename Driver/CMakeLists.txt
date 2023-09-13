@@ -10,6 +10,7 @@ target_include_directories(${LIBRARY_NAME}
         "${CMAKE_CURRENT_SOURCE_DIR}/GsmModule"
         "${CMAKE_CURRENT_SOURCE_DIR}/Timer"        
         "${CMAKE_CURRENT_SOURCE_DIR}/MotorControl" 
+        "${CMAKE_CURRENT_SOURCE_DIR}/Adc" 
 )
 
 #source
@@ -31,4 +32,6 @@ target_sources(${LIBRARY_NAME}
     ${CMAKE_CURRENT_SOURCE_DIR}/Timer/TimerNrf52.h
     ${CMAKE_CURRENT_SOURCE_DIR}/Timer/TimerCh32.h
     ${CMAKE_CURRENT_SOURCE_DIR}/Timer/ITimer.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/Adc/AdcCh32v.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/Adc/IAdc.h
 )

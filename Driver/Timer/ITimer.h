@@ -12,4 +12,6 @@ namespace ES::Driver::Timer {
         virtual void stop() = 0;
         virtual bool setParams(uint32_t freqHz, float duty) = 0;
     };
+
+
 }
