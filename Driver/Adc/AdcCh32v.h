@@ -12,7 +12,7 @@ namespace ES::Driver::Adc {
     public:
         AdcCh32vSingleEnded(ADC_TypeDef* adc, GPIO_TypeDef* port, u16 adcPin, u16 channel) : _adc(adc), _port(port), _adcPin(adcPin), _channel(channel) {
 
-            uint32_t rccPeriph  = 0;
+            /*uint32_t rccPeriph  = 0;
             if(_port == GPIOA) {
                 rccPeriph = RCC_APB2Periph_GPIOA;
             }
@@ -54,14 +54,65 @@ namespace ES::Driver::Adc {
             ADC_InitStructure.ADC_ContinuousConvMode = DISABLE;
             ADC_InitStructure.ADC_ExternalTrigConv = ADC_ExternalTrigConv_None;
             ADC_InitStructure.ADC_DataAlign = ADC_DataAlign_Right;
-            ADC_InitStructure.ADC_NbrOfChannel = 1;
+            ADC_InitStructure.ADC_NbrOfChannel = 3;
             ADC_Init(_adc, &ADC_InitStructure);
+            enable();
+            calibration();*/
+
+
         }
 
-        void init(uint8_t rank = 1, uint8_t sampleTime = ADC_SampleTime_239Cycles5) {
-            ADC_RegularChannelConfig(_adc, _channel, rank, sampleTime);;
-            enable();
-            calibration();
+        void init(uint8_t rank = 1, uint8_t sampleTime = ADC_SampleTime_41Cycles5) {
+                            ADC_InitTypeDef  ADC_InitStructure = {0};
+            GPIO_InitTypeDef GPIO_InitStructure = {0};
+
+            RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOA, ENABLE);
+            RCC_APB2PeriphClockCmd(RCC_APB2Periph_ADC1, ENABLE);
+            RCC_ADCCLKConfig(RCC_PCLK2_Div2);
+
+            GPIO_InitStructure.GPIO_Pin = GPIO_Pin_3;
+            GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AIN;
+            GPIO_Init(GPIOA, &GPIO_InitStructure);
+
+            GPIO_InitStructure.GPIO_Pin = GPIO_Pin_4;
+            GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AIN;
+            GPIO_Init(GPIOA, &GPIO_InitStructure);
+
+            GPIO_InitStructure.GPIO_Pin = GPIO_Pin_6;
+            GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AIN;
+            GPIO_Init(GPIOA, &GPIO_InitStructure);
+
+            ADC_DeInit(ADC1);
+            ADC_InitStructure.ADC_Mode = ADC_Mode_Independent;
+            ADC_InitStructure.ADC_ScanConvMode = ENABLE;
+            ADC_InitStructure.ADC_ContinuousConvMode = DISABLE;
+            ADC_InitStructure.ADC_ExternalTrigConv = ADC_ExternalTrigInjecConv_T1_CC4;
+            ADC_InitStructure.ADC_DataAlign = ADC_DataAlign_Right;
+            ADC_InitStructure.ADC_NbrOfChannel = 3;
+            ADC_Init(ADC1, &ADC_InitStructure);
+
+            ADC_InjectedSequencerLengthConfig(ADC1, 3);
+            ADC_InjectedChannelConfig(ADC1, ADC_Channel_3, 1, ADC_SampleTime_71Cycles5);
+            ADC_InjectedChannelConfig(ADC1, ADC_Channel_4, 2, ADC_SampleTime_71Cycles5);
+            ADC_InjectedChannelConfig(ADC1, ADC_Channel_6, 3, ADC_SampleTime_71Cycles5);
+
+            ADC_DiscModeChannelCountConfig(ADC1, 1);
+            //ADC_InjectedDiscModeCmd(ADC1, ENABLE);
+            ADC_ExternalTrigInjectedConvCmd(ADC1, ENABLE);
+            ADC_Cmd(ADC1, ENABLE);
+            
+
+            ADC_BufferCmd(ADC1, DISABLE); //disable buffer
+            ADC_ResetCalibration(ADC1);
+            while(ADC_GetResetCalibrationStatus(ADC1));
+            ADC_StartCalibration(ADC1);
+            while(ADC_GetCalibrationStatus(ADC1));
+            _calibrattionValue = Get_CalibrationValue(ADC1);
+            ADC_Cmd(ADC1, DISABLE);
+        }
+
+        void init2() {
+            ADC_Cmd(ADC1, ENABLE);
         }
 
         u16 getRawValue() {

@@ -9,8 +9,8 @@ target_compile_options(CH32V INTERFACE $<$<COMPILE_LANGUAGE:C>:${C_CXX_COMPILE_F
 target_compile_options(CH32V INTERFACE $<$<COMPILE_LANGUAGE:CXX>:${C_CXX_COMPILE_FLAGS}>)
 target_compile_options(CH32V INTERFACE $<$<COMPILE_LANGUAGE:CXX>:-fno-exceptions -fno-rtti -fno-use-cxa-atexit -fno-threadsafe-statics>)
 
-target_compile_options(CH32V INTERFACE $<$<COMPILE_LANGUAGE:C>:-O0 -g>)
-target_compile_options(CH32V INTERFACE $<$<COMPILE_LANGUAGE:CXX>:-O0 -g>)
+target_compile_options(CH32V INTERFACE $<$<COMPILE_LANGUAGE:C>:-Og -g>)
+target_compile_options(CH32V INTERFACE $<$<COMPILE_LANGUAGE:CXX>:-Og -g>)
 target_compile_options(CH32V INTERFACE $<$<COMPILE_LANGUAGE:ASM>:-g>)
 
 target_compile_options(CH32V INTERFACE $<$<COMPILE_LANGUAGE:ASM>:-x assembler-with-cpp>)

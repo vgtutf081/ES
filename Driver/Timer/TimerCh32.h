@@ -63,7 +63,7 @@ namespace ES::Driver::Timer {
             TIM_TimeBaseInitStructure.TIM_Period = arr;
             TIM_TimeBaseInitStructure.TIM_Prescaler = 1 - 1;
             TIM_TimeBaseInitStructure.TIM_ClockDivision = div;
-            TIM_TimeBaseInitStructure.TIM_CounterMode = TIM_CounterMode_CenterAligned1;
+            TIM_TimeBaseInitStructure.TIM_CounterMode = TIM_CounterMode_Up;
             TIM_TimeBaseInit(_tim, &TIM_TimeBaseInitStructure);
 
             TIM_OCInitStructure.TIM_OCMode = TIM_OCMode_PWM1;
@@ -89,6 +89,16 @@ namespace ES::Driver::Timer {
             }
             TIM_CtrlPWMOutputs(_tim, ENABLE);
             TIM_ARRPreloadConfig(_tim, ENABLE);
+            TIM_SelectOutputTrigger(TIM1, TIM_TRGOSource_Update);
+
+            /*TIM_OCInitStructure.TIM_OCMode = TIM_OCMode_PWM1;
+            TIM_OCInitStructure.TIM_OutputState = TIM_OutputState_Enable;
+            TIM_OCInitStructure.TIM_Pulse = 20;
+            TIM_OCInitStructure.TIM_OCPolarity = TIM_OCPolarity_Low;
+            TIM_OC4Init(TIM1, &TIM_OCInitStructure);*/
+
+            TIM_SelectOutputTrigger(TIM1, TIM_TRGOSource_OC4Ref);
+
             TIM_Cmd(_tim, DISABLE);
         }
 
@@ -172,10 +182,28 @@ namespace ES::Driver::Timer {
 
         }
 
-        void setIrq(uint8_t priority, uint16_t event = TIM_IT_Update) {
+        void setIrq(uint8_t priority, uint16_t event = TIM_IT_CC4) {
+                TIM_OCInitTypeDef TIM_OCInitStructure={0};
+                TIM_OCInitStructure.TIM_OCMode = TIM_OCMode_PWM2;
+
+                TIM_OCInitStructure.TIM_OutputState = TIM_OutputState_Disable;
+                TIM_OCInitStructure.TIM_OutputNState = TIM_OutputNState_Disable;
+                TIM_OCInitStructure.TIM_Pulse = 0;
+                TIM_OCInitStructure.TIM_OCPolarity = TIM_OCPolarity_High;
+                TIM_OCInitStructure.TIM_OCNPolarity = TIM_OCPolarity_High;
+                TIM_OCInitStructure.TIM_OCIdleState = TIM_OCIdleState_Reset;
+                TIM_OCInitStructure.TIM_OCNIdleState = TIM_OCNIdleState_Reset;
+                TIM_OC4Init(_tim, &TIM_OCInitStructure);
+                TIM_OC4PreloadConfig(_tim, TIM_OCPreload_Disable);
+                _tim->CCER |= TIM_CC4NP;
+                _tim->CCER |= TIM_CC4P;
+                _tim->CH4CVR = 10;
+                _tim->CCER |= TIM_CC4E;
+                
+
                 TIM_ITConfig(_tim, event, ENABLE);
                 NVIC_InitTypeDef NVIC_InitStructure;
-                NVIC_InitStructure.NVIC_IRQChannel = TIM1_UP_IRQn;
+                NVIC_InitStructure.NVIC_IRQChannel = TIM1_CC_IRQn;
                 NVIC_InitStructure.NVIC_IRQChannelPreemptionPriority = priority;
                 NVIC_InitStructure.NVIC_IRQChannelSubPriority = 0;
                 NVIC_InitStructure.NVIC_IRQChannelCmd = ENABLE;
@@ -207,16 +235,16 @@ namespace ES::Driver::Timer {
             _tim->PSC = prescaler;
 
             if(_channel == 1) {
-                _tim->CH1CVR |= static_cast<uint16_t>(duty * _arr);
+                _tim->CH1CVR = static_cast<uint16_t>(duty * _arr);
             }
             else if(_channel == 2) {
-                _tim->CH2CVR |= static_cast<uint16_t>(duty * _arr);
+                _tim->CH2CVR = static_cast<uint16_t>(duty * _arr);
             }
             else if(_channel == 3) {
-                _tim->CH3CVR |= static_cast<uint16_t>(duty * _arr);
+                _tim->CH3CVR = static_cast<uint16_t>(duty * _arr);
             }
             else if(_channel == 4) {
-                _tim->CH4CVR |= static_cast<uint16_t>(duty * _arr);
+                _tim->CH4CVR = static_cast<uint16_t>(duty * _arr);
             }
             return true;
         }
@@ -279,14 +307,12 @@ namespace ES::Driver::Timer {
             TIM_Cmd(_tim, ENABLE);
         }
 
-
-    private:
-
-
         void disable() {
-            //TIM_Cmd(_tim, DISABLE);
+            TIM_Cmd(_tim, DISABLE);
         }
         
+    private:
+
         u16 _channel;
         u16 _ccp = 0;
         u16 _arr;

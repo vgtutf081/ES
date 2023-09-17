@@ -3,6 +3,7 @@
 #include "IGpio.h"
 #include "ITimer.h"
 #include "AdcCh32v.h"
+#include "BinarySemaphore.h"
 
 namespace ES::Driver::MotorControl {
 
@@ -29,12 +30,13 @@ namespace ES::Driver::MotorControl {
     class Drv8328 {
     public:
         Drv8328(Gpio::IGpio& nSleep, Gpio::IGpio& nFault, Timer::PwmCh32v& pwmA, Timer::PwmCh32v& pwmB, Timer::PwmCh32v& pwmC, Adc::AdcCh32vSingleEnded& adcA, Adc::AdcCh32vSingleEnded& adcB, Adc::AdcCh32vSingleEnded& adcC) : _nSleep(nSleep), _nFault(nFault), _pwmA(pwmA), _pwmB(pwmB), _pwmC(pwmC), _adcA(adcA), _adcB(adcB), _adcC(adcC) {
-            _pwmA.setParams(_freq, 0.3f);
-            _pwmB.setParams(_freq, 0.3f);
-            _pwmC.setParams(_freq, 0.3f);
+            _pwmA.setParams(_freq, 0.2f);
+            _pwmB.setParams(_freq, 0.2f);
+            _pwmC.setParams(_freq, 0.2f);
             _nSleep.configureOutput();
             _nSleep.reset();
-            _nFault.configureInput(Gpio::PullMode::Up);
+            _nFault.configureOutput();
+            _nFault.reset();
         }
 
         void init() {
@@ -75,6 +77,7 @@ namespace ES::Driver::MotorControl {
         }
 
         void nextStep() {
+            steps++;
             if(_nextStep == BldcStep::ChAl) {
                 commutateHigh(_pwmC);
                 commutateLow(_pwmA);
@@ -82,7 +85,6 @@ namespace ES::Driver::MotorControl {
                 _nextStep = BldcStep::ChBl;
                 _bemfPhase = MotorPhase::B;
                 _bemfEdge = BemfEdge::Falling;
-                _adcBemf = _adcB;
             }
             else if(_nextStep == BldcStep::ChBl) {
                 commutateHigh(_pwmC);
@@ -92,6 +94,9 @@ namespace ES::Driver::MotorControl {
                 _bemfPhase = MotorPhase::A;
                 _bemfEdge = BemfEdge::Rising;
                 _adcBemf = _adcA;
+                ADC_Cmd(ADC1, DISABLE);
+                ADC_RegularChannelConfig(ADC1, 6, 1, ADC_SampleTime_28Cycles5);
+                ADC_Cmd(ADC1, ENABLE);
             }
             else if(_nextStep == BldcStep::AhBl) {
                 commutateHigh(_pwmA);
@@ -118,7 +123,6 @@ namespace ES::Driver::MotorControl {
                 _nextStep = BldcStep::BhAl;
                 _bemfPhase = MotorPhase::A;
                 _bemfEdge = BemfEdge::Falling;
-                _adcBemf = _adcA;
             }
             else if(_nextStep == BldcStep::BhAl) {
                 commutateHigh(_pwmB);
@@ -127,9 +131,19 @@ namespace ES::Driver::MotorControl {
                 _nextStep = BldcStep::ChAl;
                 _bemfPhase = MotorPhase::C;
                 _bemfEdge = BemfEdge::Rising;
-                _adcBemf = _adcC;
             }
+            //count = 0;
         }
+
+        uint32_t steps = 0;
+        uint32_t count = 0;
+
+        MotorPhase _bemfPhaseStart;
+        BemfEdge _bemfEdgeStart;
+
+        MotorPhase _bemfPhaseEnd;
+        BemfEdge _bemfEdgeEnd;
+        
 
         bool openLoop = true;
 
@@ -152,10 +166,16 @@ namespace ES::Driver::MotorControl {
         bool adcFlag = false;
         bool bemfFlag = false;
 
+        Gpio::IGpio& _nFault;
+
+        Threading::BinarySemaphore adcSem;
+
+        bool _adcSem = false;
+
     private:
 
-        int _freq = 128000;
+        int _freq = 32000;
         Gpio::IGpio& _nSleep;
-        Gpio::IGpio& _nFault;
+
     };
 }
