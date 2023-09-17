@@ -1,7 +1,8 @@
 #pragma once
 
 #include "nrf_gpio.h"
-#include "GpioNrf.h"
+#include "GpioNrf52.h"
+#include "GpioNrfModes.h"
 
 namespace ES::Driver::Gpio {
 

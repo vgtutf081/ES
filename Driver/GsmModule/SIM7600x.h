@@ -21,6 +21,8 @@ namespace ES::Driver {
     const char CR = 0X0D;
 
     const std::string AtCommandAt = "AT";
+    const char ATD[] = {'A', 'T', 'D'}; //make call
+    const char ATA[] = {'A', 'T', 'A'}; //answer call
     const char AtCommandGpsEnable[] = {'A', 'T', '+',  'C', 'G', 'P', 'S', '=', '1'};
     const char AtCommandGpsOk[] = {'A', 'T', '+',  'C', 'G', 'P', 'S', '=', '1', CR, CR, LF, 'O', 'K'};
     const char AtCommandGpsInfo[] = {'A', 'T', '+',  'C', 'G', 'P', 'S', 'I', 'N', 'F', 'O'};
@@ -278,10 +280,20 @@ namespace ES::Driver {
                     break;
                 }
             }
+            return true;
         }
 
         bool parseData() {
+            return true;
+        }
 
+        bool makeCall(const char * number) {
+            auto status = sendString(ATD, sizeof(ATD));
+        }
+
+        bool answerCall() {
+            sendString(ATA, sizeof(ATA));
+            bool status = false;
         }
 
         Threading::BinarySemaphore messageRecSem;
