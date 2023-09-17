@@ -6,7 +6,11 @@
 #include "FreeRTOS.h"
 #include "task.h"
 
-namespace ES::Threading::ThreadFreeRtos {
+namespace ES::Threading {
+
+    inline void yield() {
+		taskYIELD();
+	}
     
     class Thread {
     public:
@@ -15,11 +19,16 @@ namespace ES::Threading::ThreadFreeRtos {
     
         }
 
-        Thread(Thread&& other) {
+        Thread(Thread&& other) : _taskHandle(other._taskHandle), _body(other._body) {
+            other._taskHandle = nullptr;
+            other._body = nullptr;
         }
 
-        Thread() {
+        void operator=(Thread&& other) {
+            
         }
+
+        Thread() = default;
 
         ~Thread() {
             vTaskDelete(_taskHandle);

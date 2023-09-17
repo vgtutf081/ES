@@ -10,5 +10,7 @@ target_include_directories(${PROJECT_NAME}
 target_sources(${PROJECT_NAME} 
     INTERFACE
     ThreadFreeRtos/ThreadFreeRtos.h
+    ThreadFreeRtos/CriticalSection.h
+    ThreadFreeRtos/BinarySemaphore.h
 )
 

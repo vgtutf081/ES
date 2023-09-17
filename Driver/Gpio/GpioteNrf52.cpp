@@ -1,6 +1,6 @@
-#include "GpioteNrf52.h"
-
 #if defined(ES_NRF_GPIOTE)
+
+#include "GpioteNrf52.h"
 
 namespace ES::Driver::Gpiote {
 
