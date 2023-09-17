@@ -1,24 +1,9 @@
 #pragma once
 
 #include "nrf_gpio.h"
+#include "GpioNrf.h"
 
 namespace ES::Driver::Gpio {
-
-    enum class PinMode : uint32_t {
-        Input = NRF_GPIO_PIN_DIR_INPUT,
-        Output = NRF_GPIO_PIN_DIR_OUTPUT
-    };
-
-    enum class PullMode : uint32_t {
-        NoPull = NRF_GPIO_PIN_DIR_INPUT,
-        PullDown = NRF_GPIO_PIN_DIR_OUTPUT,
-        PullUp = NRF_GPIO_PIN_PULLUP
-    };
-
-    enum class DriveMode : uint32_t {
-        PushPull = NRF_GPIO_PIN_S0S1,
-        OpenDrain = NRF_GPIO_PIN_S0D1
-    };
 
     struct Nrf52Gpio {
     public:
