@@ -8,12 +8,12 @@
 #include "task.h"
 #include "semphr.h"
 #include "CriticalSection.h"
-#include "BinarySemaphore.h"
+#include "Semaphore.h"
 
 #include <array>
 #include <string>
 
-
+#include "nrf_check_ret.h"
 
 namespace ES::Driver {
 
@@ -44,12 +44,15 @@ namespace ES::Driver {
         Failed
     };
 
-    enum ModuleMessagingStatus {
+    enum ModuleStatus {
         None,
         WaitingStatus,
         WaitingAtCommandRepeat,
         WaitingReadyStatus,
-        WaitingForData
+        WaitingForData,
+        Idle,
+        Calling,
+        Ring
     };
 
     enum CardinalDirections {
@@ -101,6 +104,7 @@ namespace ES::Driver {
             _uart.getStream(std::begin(_recieveByte), 1); // crlf first
             _timer.init(10, timerEventHandler, this);
             //_modulePowerEn.set();
+            _nDisable.configureOutput();
             _nDisable.set();
             _enableStatus = ModuleEnableStatus::Disabled;
             while(_enableStatus != ModuleEnableStatus::Enabled) {
@@ -123,9 +127,9 @@ namespace ES::Driver {
         ret_code_t sendString(const char * s, size_t size) {
             ret_code_t status = true;
             //return _uart.writeStream(_buffer.begin(), ++index);
-            status &= sendCrLf();
-            status &=_uart.writeStream(s, size);
-            status &= sendCrLf();
+            sendCrLf();
+            status =_uart.writeStream(s, size);
+            sendCrLf();
             return status;
         }
 
@@ -187,21 +191,27 @@ namespace ES::Driver {
                     _enableStatus = ModuleEnableStatus::Enabled;
                 }
             }
-            if(_messagingStatus == ModuleMessagingStatus::WaitingReadyStatus) {
+            if(_moduleStatus == ModuleStatus::WaitingReadyStatus) {
                 if(checkAT(_atCommandForCheck, true)) {
-                    _messagingStatus = ModuleMessagingStatus::None;
+                    _moduleStatus = ModuleStatus::None;
                     _readyStatusRecieved.give();
                 }
             }
-            if(_messagingStatus == ModuleMessagingStatus::WaitingAtCommandRepeat) {
+            if(_moduleStatus == ModuleStatus::WaitingAtCommandRepeat) {
                 if(checkAT(_atCommandForCheck, false)) {
-                    _messagingStatus = ModuleMessagingStatus::WaitingForData;
+                    _moduleStatus = ModuleStatus::WaitingForData;
                 }
             }
-            if(_messagingStatus == ModuleMessagingStatus::WaitingForData) {
+            if(_moduleStatus == ModuleStatus::WaitingForData) {
                 parseData();
-                _messagingStatus = ModuleMessagingStatus::None;
+                _moduleStatus = ModuleStatus::Idle;
                 _dataRecieved.give();
+            }
+            if(_moduleStatus == ModuleStatus::Idle) {
+                if(checkAT(_atCommandForCheck, true)) {
+                    _moduleStatus = ModuleStatus::Ring;
+                    incomingCall.give();
+                }
             }
         }
 
@@ -243,15 +253,16 @@ namespace ES::Driver {
             if(resetIndex) {
                 _parserIndex = 0;
             }
+            
             return status;
         }
 
         bool enableGps() {
             ret_code_t status;
-            if(_messagingStatus == ModuleMessagingStatus::None && !_gpsReady) {
+            if(_moduleStatus == ModuleStatus::None && !_gpsReady) {
                 status = sendString(AtCommandGpsEnable, sizeof(AtCommandGpsEnable));
                 _atCommandForCheck = AtCommandGpsOk;
-                _messagingStatus = ModuleMessagingStatus::WaitingReadyStatus;
+                _moduleStatus = ModuleStatus::WaitingReadyStatus;
                 size_t counter = 20;
                 while(counter--) {
                     if(_readyStatusRecieved.take(100)) {
@@ -261,7 +272,7 @@ namespace ES::Driver {
                 }
             }
             _atCommandForCheck = nullptr;
-            return _gpsReady;
+            return CheckErrorCode::success(status);
         }
 
         bool getLocation() {
@@ -269,10 +280,10 @@ namespace ES::Driver {
                 return false;
             }
             ret_code_t status;
-            if(_messagingStatus == ModuleMessagingStatus::None) {
+            if(_moduleStatus == ModuleStatus::None) {
                 status = sendString(AtCommandGpsInfo, sizeof(AtCommandGpsInfo));
                 _atCommandForCheck = AtCommandGpsInfo;
-                _messagingStatus = ModuleMessagingStatus::WaitingAtCommandRepeat;
+                _moduleStatus = ModuleStatus::WaitingAtCommandRepeat;
             }
             size_t counter = 20;
             while(counter--) {
@@ -280,7 +291,7 @@ namespace ES::Driver {
                     break;
                 }
             }
-            return true;
+            return CheckErrorCode::success(status);
         }
 
         bool parseData() {
@@ -289,14 +300,21 @@ namespace ES::Driver {
 
         bool makeCall(const char * number) {
             auto status = sendString(ATD, sizeof(ATD));
+            return CheckErrorCode::success(status);
         }
 
         bool answerCall() {
             sendString(ATA, sizeof(ATA));
             bool status = false;
+            return status;
+        }
+
+        ModuleStatus getStatus() {
+            return _moduleStatus;
         }
 
         Threading::BinarySemaphore messageRecSem;
+        Threading::BinarySemaphore incomingCall;
         
     private:
     
@@ -345,7 +363,7 @@ namespace ES::Driver {
         bool _readyStatus = false;
 
         ModuleEnableStatus _enableStatus = ModuleEnableStatus::Disabled;
-        ModuleMessagingStatus _messagingStatus = ModuleMessagingStatus::None;
+        ModuleStatus _moduleStatus = ModuleStatus::None;
     };
 
 }

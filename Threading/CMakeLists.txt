@@ -11,6 +11,7 @@ target_sources(${PROJECT_NAME}
     INTERFACE
     ThreadFreeRtos/ThreadFreeRtos.h
     ThreadFreeRtos/CriticalSection.h
-    ThreadFreeRtos/BinarySemaphore.h
+    ThreadFreeRtos/Semaphore.h
+    ThreadFreeRtos/FreeRtosQueue.h
 )
 
