@@ -45,6 +45,9 @@ namespace ES::Driver::Uarte {
             while(nrfx_uarte_tx_in_progress(&_instance)) {
                 Threading::yield();
             }
+            /*if(nrfx_uarte_tx_in_progress(&_instance)) {
+                stopStream();
+            }*/
             err_code = nrfx_uarte_tx(&_instance, sendBuffer, length);
             return err_code;
         }

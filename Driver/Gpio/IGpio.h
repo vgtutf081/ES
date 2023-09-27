@@ -18,6 +18,8 @@ namespace ES::Driver::Gpio {
 
         virtual void disable() = 0;
 
+        virtual uint32_t getPin() = 0;
+
         virtual void setMode(PinMode mode, DriveMode driveMode, PullMode pullMode) = 0;
 
         inline void configureOutput(DriveMode driveMode = DriveMode::PushPull, PullMode pullMode = PullMode::None) {
@@ -27,5 +29,6 @@ namespace ES::Driver::Gpio {
         inline void configureInput(PullMode pullMode = PullMode::None) {
             setMode(PinMode::Input, DriveMode::None, pullMode);
         }
+
     };
 }
