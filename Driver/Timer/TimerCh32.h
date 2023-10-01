@@ -71,6 +71,7 @@ namespace ES::Driver::Timer {
             TIM_OCInitStructure.TIM_OutputState = TIM_OutputState_Enable;
             TIM_OCInitStructure.TIM_Pulse = 0;
             TIM_OCInitStructure.TIM_OCPolarity = TIM_OCPolarity_High;
+            TIM_OCInitStructure.TIM_OCIdleState = TIM_OCIdleState_Reset;
             if(channel == 1) {
                 TIM_OC1Init(_tim, &TIM_OCInitStructure);
                 TIM_OC1PreloadConfig(_tim, TIM_OCPreload_Disable);
@@ -130,8 +131,8 @@ namespace ES::Driver::Timer {
             GPIO_Init(_portN, &GPIO_InitStructure);
 
             TIM_BDTRInitTypeDef     TIM_BDTRInitStructure = {0};
-            TIM_BDTRInitStructure.TIM_OSSIState = TIM_OSSIState_Disable;
-            TIM_BDTRInitStructure.TIM_OSSRState = TIM_OSSRState_Disable;
+            TIM_BDTRInitStructure.TIM_OSSRState = TIM_OSSRState_Enable;
+            TIM_BDTRInitStructure.TIM_OSSIState = TIM_OSSIState_Enable;
             TIM_BDTRInitStructure.TIM_LOCKLevel = TIM_LOCKLevel_OFF;
             TIM_BDTRInitStructure.TIM_DeadTime = 0x0;
             TIM_BDTRInitStructure.TIM_Break = TIM_Break_Disable;
@@ -140,10 +141,10 @@ namespace ES::Driver::Timer {
             TIM_BDTRConfig(_tim, &TIM_BDTRInitStructure);
 
             TIM_OCInitTypeDef TIM_OCInitStructure={0};
-            TIM_OCInitStructure.TIM_OCMode = TIM_OCMode_PWM2;
+            TIM_OCInitStructure.TIM_OCMode = TIM_OCMode_PWM1;
 
-            TIM_OCInitStructure.TIM_OutputState = TIM_OutputState_Disable;
-            TIM_OCInitStructure.TIM_OutputNState = TIM_OutputNState_Disable;
+            TIM_OCInitStructure.TIM_OutputState = TIM_OutputState_Enable;
+            TIM_OCInitStructure.TIM_OutputNState = TIM_OutputNState_Enable;
             TIM_OCInitStructure.TIM_Pulse = 0;
             TIM_OCInitStructure.TIM_OCPolarity = TIM_OCPolarity_High;
             TIM_OCInitStructure.TIM_OCNPolarity = TIM_OCPolarity_High;
@@ -152,26 +153,26 @@ namespace ES::Driver::Timer {
             if(_channel == 1) {
                 TIM_OC1Init(_tim, &TIM_OCInitStructure);
                 TIM_OC1PreloadConfig(_tim, TIM_OCPreload_Disable);
-                _tim->CCER |= TIM_CC1NP;
-                _tim->CCER |= TIM_CC1P;
+                //_tim->CCER |= TIM_CC1NP;
+                //_tim->CCER |= TIM_CC1P;
             }
             else if(_channel == 2) {
                 TIM_OC2Init(_tim, &TIM_OCInitStructure);
                 TIM_OC2PreloadConfig(_tim, TIM_OCPreload_Disable);
-                _tim->CCER |= TIM_CC2NP;
-                _tim->CCER |= TIM_CC2P;
+                //_tim->CCER |= TIM_CC2NP;
+                //_tim->CCER |= TIM_CC2P;
             }
             else if(_channel == 3) {
                 TIM_OC3Init(_tim, &TIM_OCInitStructure);
                 TIM_OC3PreloadConfig(_tim, TIM_OCPreload_Disable);
-                _tim->CCER |= TIM_CC3NP;
-                _tim->CCER |= TIM_CC3P;
+                //_tim->CCER |= TIM_CC3NP;
+                //_tim->CCER |= TIM_CC3P;
             }
             else if(_channel == 4) {
                 TIM_OC4Init(_tim, &TIM_OCInitStructure);
                 TIM_OC4PreloadConfig(_tim, TIM_OCPreload_Disable);
-                _tim->CCER |= TIM_CC4NP;
-                _tim->CCER |= TIM_CC4P;
+                //_tim->CCER |= TIM_CC4NP;
+                //_tim->CCER |= TIM_CC4P;
             }
 
         }
