@@ -42,7 +42,7 @@ namespace ES::Driver {
     const char AtStatusOk[] = "OK";
     const char AtCrLf[] = {CR, LF};
 
-    const char AtdTest[] = {'A', 'T', 'D', '+','7','9','0','8','1','4','6','0','3','5','6', ';'};
+    const char AtdTest[] = "ATD+79081460356;";
 
     enum ModuleEnableStatus {
         Disabled,
@@ -58,8 +58,8 @@ namespace ES::Driver {
         WaitingReadyStatus,
         WaitingForData,
         Idle,
-        Calling,
-        Ring
+        OutgoingCall,
+        IncomingCall
     };
 
     enum DataType {
@@ -147,24 +147,39 @@ namespace ES::Driver {
             //_nReset.reset();
         }
 
+        bool sendCommand(const char * s) {
+            bool status = sendString(s, 2);
+            _atCommandForCheck = s;
+            _moduleStatus = ModuleStatus::WaitingAtCommandRepeat;
+            size_t counter = 20;
+            while(counter--) {
+                if(_commandConfirmed.take(100)) {
+                    _atCommandForCheck = nullptr;
+                    _moduleStatus = ModuleStatus::Idle;
+                    return true;
+                }
+            }
+            return false;
+        }
+
         bool checkCallsAvailability() {
-            ret_code_t retStatus;
             bool status = false;
             if(_enableStatus == ModuleEnableStatus::Enabled) {
-                retStatus = sendString(AtCopsRead, sizeof(AtCopsRead));
-                _atCommandForCheck = AtCopsRead;
-                _moduleStatus = ModuleStatus::WaitingAtCommandRepeat;
+                if(sendCommand(AtCopsRead)) {
+                    return false;
+                }
+                _moduleStatus = ModuleStatus::WaitingForData;
                 _dataType = DataType::CopsData;
                 size_t counter = 20;
                 while(counter--) {
                     if(_dataRecieved.take(100)) {
                         status = true;
-                        break;
-                    }
+                    }  
                 }
             }
-            _atCommandForCheck = nullptr;
-            return status && CheckErrorCode::success(retStatus);
+            _moduleStatus = ModuleStatus::Idle;
+            _dataType = DataType::NoneData;
+            return status;
         }
  
         ret_code_t sendString(const char * s, size_t size) {
@@ -248,7 +263,7 @@ namespace ES::Driver {
             }
             if(_moduleStatus == ModuleStatus::WaitingAtCommandRepeat) {
                 if(checkAT(_atCommandForCheck)) {
-                    _moduleStatus = ModuleStatus::WaitingForData;
+                    _commandConfirmed.give();
                 }
                 return;
             }
@@ -261,7 +276,7 @@ namespace ES::Driver {
             }
             if(_moduleStatus == ModuleStatus::Idle) {
                 if(checkAT(_atCommandForCheck)) {
-                    _moduleStatus = ModuleStatus::Ring;
+                    //_moduleStatus = ModuleStatus::Ring;
                     incomingCall.give();
                 }
                 return;
@@ -372,6 +387,7 @@ namespace ES::Driver {
 
         bool makeCall() {
             auto status = sendString(AtdTest, sizeof(AtdTest));
+
             return CheckErrorCode::success(status);
         }
 
@@ -412,6 +428,7 @@ namespace ES::Driver {
         DataType _gpsData;
 
         Threading::BinarySemaphore _readyStatusRecieved;
+        Threading::BinarySemaphore _commandConfirmed;
         Threading::BinarySemaphore _dataRecieved;
 
         Uarte::UarteNrf _uart;
