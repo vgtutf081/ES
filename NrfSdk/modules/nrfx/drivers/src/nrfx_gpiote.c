@@ -109,6 +109,7 @@ NRFX_STATIC_ASSERT(MAX_PIN_NUMBER <= (1 << POLARITY_FIELD_POS));
 typedef struct
 {
     nrfx_gpiote_evt_handler_t handlers[GPIOTE_CH_NUM + NRFX_GPIOTE_CONFIG_NUM_OF_LOW_POWER_EVENTS];
+    void*                     context[GPIOTE_CH_NUM + NRFX_GPIOTE_CONFIG_NUM_OF_LOW_POWER_EVENTS];
     int8_t                    pin_assignments[MAX_PIN_NUMBER];
     int8_t                    port_handlers_pins[NRFX_GPIOTE_CONFIG_NUM_OF_LOW_POWER_EVENTS];
     uint8_t                   configured_pins[((MAX_PIN_NUMBER)+7) / 8];
@@ -151,10 +152,12 @@ __STATIC_INLINE bool pin_in_use_by_gpiote(uint32_t pin)
 __STATIC_INLINE void pin_in_use_by_te_set(uint32_t                  pin,
                                           uint32_t                  channel_id,
                                           nrfx_gpiote_evt_handler_t handler,
+                                          void*                     context,
                                           bool                      is_channel)
 {
     m_cb.pin_assignments[pin] = channel_id;
     m_cb.handlers[channel_id] = handler;
+    m_cb.context[channel_id] = context;
     if (!is_channel)
     {
         m_cb.port_handlers_pins[channel_id - GPIOTE_CH_NUM] = (int8_t)pin;
@@ -200,6 +203,11 @@ __STATIC_INLINE nrfx_gpiote_evt_handler_t channel_handler_get(uint32_t channel)
     return m_cb.handlers[channel];
 }
 
+__STATIC_INLINE void* channel_context_get(uint32_t channel)
+{
+    return m_cb.context[channel];
+}
+
 static nrfx_gpiote_pin_t port_handler_pin_get(uint32_t handler_idx)
 {
     uint8_t pin_and_polarity = (uint8_t)m_cb.port_handlers_pins[handler_idx];
@@ -212,7 +220,7 @@ static nrf_gpiote_polarity_t port_handler_polarity_get(uint32_t handler_idx)
     return (nrf_gpiote_polarity_t)((pin_and_polarity & POLARITY_FIELD_MASK) >> POLARITY_FIELD_POS);
 }
 
-static int8_t channel_port_alloc(uint32_t pin, nrfx_gpiote_evt_handler_t handler, bool channel)
+static int8_t channel_port_alloc(uint32_t pin, nrfx_gpiote_evt_handler_t handler, void* context, bool channel)
 {
     int8_t   channel_id = NO_CHANNELS;
     uint32_t i;
@@ -227,7 +235,7 @@ static int8_t channel_port_alloc(uint32_t pin, nrfx_gpiote_evt_handler_t handler
     {
         if (m_cb.handlers[i] == FORBIDDEN_HANDLER_ADDRESS)
         {
-            pin_in_use_by_te_set(pin, i, handler, channel);
+            pin_in_use_by_te_set(pin, i, handler, context, channel);
             channel_id = i;
             break;
         }
@@ -340,7 +348,7 @@ nrfx_err_t nrfx_gpiote_out_init(nrfx_gpiote_pin_t                pin,
     {
         if (p_config->task_pin)
         {
-            int8_t channel = channel_port_alloc(pin, NULL, true);
+            int8_t channel = channel_port_alloc(pin, NULL, NULL, true);
 
             if (channel != NO_CHANNELS)
             {
@@ -555,7 +563,8 @@ void nrfx_gpiote_clr_task_trigger(nrfx_gpiote_pin_t pin)
 
 nrfx_err_t nrfx_gpiote_in_init(nrfx_gpiote_pin_t               pin,
                                nrfx_gpiote_in_config_t const * p_config,
-                               nrfx_gpiote_evt_handler_t       evt_handler)
+                               nrfx_gpiote_evt_handler_t       evt_handler,
+                               void*                           context)
 {
     NRFX_ASSERT(nrf_gpio_pin_present_check(pin));
     nrfx_err_t err_code = NRFX_SUCCESS;
@@ -567,7 +576,7 @@ nrfx_err_t nrfx_gpiote_in_init(nrfx_gpiote_pin_t               pin,
     }
     else
     {
-        int8_t channel = channel_port_alloc(pin, evt_handler, p_config->hi_accuracy);
+        int8_t channel = channel_port_alloc(pin, evt_handler, context, p_config->hi_accuracy);
         if (channel != NO_CHANNELS)
         {
             if (!p_config->skip_gpio_setup)
@@ -772,7 +781,7 @@ static void port_event_handle(uint32_t * latch)
                      (sense == NRF_GPIO_PIN_SENSE_HIGH && polarity == NRF_GPIOTE_POLARITY_LOTOHI) ||
                      (sense == NRF_GPIO_PIN_SENSE_LOW && polarity == NRF_GPIOTE_POLARITY_HITOLO)))
                 {
-                    handler(pin, polarity);
+                    handler(pin, polarity, channel_context_get((uint32_t)channel_port_get(pin)));
                 }
             }
         }
@@ -918,7 +927,7 @@ void nrfx_gpiote_irq_handler(void)
                 NRFX_LOG_DEBUG("Pin: %d, polarity: %d.", pin, polarity);
                 if (handler)
                 {
-                    handler(pin, polarity);
+                    handler(pin, polarity, channel_context_get(i));
                 }
             }
             mask <<= 1;

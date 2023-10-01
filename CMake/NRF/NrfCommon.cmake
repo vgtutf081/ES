@@ -21,7 +21,7 @@ target_compile_options(NRF INTERFACE $<$<COMPILE_LANGUAGE:CXX>:-O0 -g>)
 target_compile_options(NRF INTERFACE $<$<COMPILE_LANGUAGE:ASM>:-g>)
 
 target_link_options(NRF INTERFACE 
-    --sysroot="${TOOLCHAIN_SYSROOT}"
+    --sysroot="${TOOLCHAIN_SYSROOT}" 
     ${COMMON_COMPILE_FLAGS}
     ${C_CXX_COMPILE_FLAGS} 
     LINKER:-gc-sections 

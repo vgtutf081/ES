@@ -206,7 +206,7 @@ typedef uint32_t nrfx_gpiote_pin_t;
  * @param[in] pin    Pin that triggered this event.
  * @param[in] action Action that led to triggering this event.
  */
-typedef void (*nrfx_gpiote_evt_handler_t)(nrfx_gpiote_pin_t pin, nrf_gpiote_polarity_t action);
+typedef void (*nrfx_gpiote_evt_handler_t)(nrfx_gpiote_pin_t pin, nrf_gpiote_polarity_t action, void* context);
 
 /**
  * @brief Function for initializing the GPIOTE module.
@@ -385,7 +385,8 @@ uint32_t nrfx_gpiote_clr_task_addr_get(nrfx_gpiote_pin_t pin);
  */
 nrfx_err_t nrfx_gpiote_in_init(nrfx_gpiote_pin_t               pin,
                                nrfx_gpiote_in_config_t const * p_config,
-                               nrfx_gpiote_evt_handler_t       evt_handler);
+                               nrfx_gpiote_evt_handler_t       evt_handler,
+                               void*                           context);
 
 /**
  * @brief Function for uninitializing a GPIOTE input pin.

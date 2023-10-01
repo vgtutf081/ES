@@ -41,37 +41,33 @@ namespace ES::Driver::Gpio {
             return _port;
         }
 
-        bool set() override {
+        void set() override {
             GPIO_SetBits(_port, _pin);
             _pinSet = true;
-            return true;
         }
 
-        bool reset() override {
+        void reset() override {
             GPIO_ResetBits(_port, _pin);
             _pinSet = false;
-            return true;
         }
 
-        bool toggle() override {
+        void toggle() override {
             if(_pinSet) {
                 reset();
             }
             else {
                 set();
             }
-            return true;
         }
 
         bool read() override {
             return GPIO_ReadInputDataBit(_port, _pin);
         }
 
-        bool disable() override {
-            return true;
+        void disable() override {
         }
 
-        bool setMode(PinMode mode, DriveMode drive, PullMode pull) {
+        void setMode(PinMode mode, DriveMode drive, PullMode pull) {
             GPIOMode_TypeDef modeDrivePull;
             if(mode == PinMode::AnalogInput) {
                 modeDrivePull = GPIO_Mode_AIN;
@@ -109,7 +105,6 @@ namespace ES::Driver::Gpio {
             GPIO_InitStructure.GPIO_Mode = modeDrivePull;
             GPIO_InitStructure.GPIO_Speed = GPIO_Speed_50MHz;
             GPIO_Init(_port, &GPIO_InitStructure);
-            return true;
         }
 
         private:

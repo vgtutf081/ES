@@ -45,6 +45,8 @@ INTERFACE
     source/include/stream_buffer.h
     source/include/task.h
     source/include/timers.h
+    source/include/semphr.h
+    source/include/queue.h
 )
 
 
