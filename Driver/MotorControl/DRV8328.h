@@ -35,8 +35,7 @@ namespace ES::Driver::MotorControl {
             _pwmC.setParams(_freq, 0.2f);
             _nSleep.configureOutput();
             _nSleep.reset();
-            _nFault.configureOutput();
-            _nFault.reset();
+            _nFault.configureInput(Gpio::PullMode::Up);
         }
 
         void init() {
@@ -93,10 +92,6 @@ namespace ES::Driver::MotorControl {
                 _nextStep = BldcStep::AhBl;
                 _bemfPhase = MotorPhase::A;
                 _bemfEdge = BemfEdge::Rising;
-                _adcBemf = _adcA;
-                ADC_Cmd(ADC1, DISABLE);
-                ADC_RegularChannelConfig(ADC1, 6, 1, ADC_SampleTime_28Cycles5);
-                ADC_Cmd(ADC1, ENABLE);
             }
             else if(_nextStep == BldcStep::AhBl) {
                 commutateHigh(_pwmA);
@@ -105,7 +100,6 @@ namespace ES::Driver::MotorControl {
                 _nextStep = BldcStep::AhCl;
                 _bemfPhase = MotorPhase::C;
                 _bemfEdge = BemfEdge::Falling;
-                _adcBemf = _adcC;
             }
             else if(_nextStep == BldcStep::AhCl) {
                 commutateHigh(_pwmA);
@@ -114,7 +108,6 @@ namespace ES::Driver::MotorControl {
                 _nextStep = BldcStep::BhCl;
                 _bemfPhase = MotorPhase::B;
                 _bemfEdge = BemfEdge::Rising;
-                _adcBemf = _adcB;
             }
             else if(_nextStep == BldcStep::BhCl) {
                 commutateHigh(_pwmB);
@@ -132,6 +125,7 @@ namespace ES::Driver::MotorControl {
                 _bemfPhase = MotorPhase::C;
                 _bemfEdge = BemfEdge::Rising;
             }
+            adcFlag = true;
             //count = 0;
         }
 
