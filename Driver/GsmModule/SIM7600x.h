@@ -43,10 +43,18 @@ namespace ES::Driver {
     const char AtStatusOk[] = "OK";
     const char AtCrLf[] = {CR, LF};
 
+    const char AnswerCall[] = "ATA";
+    const char DisconnectCall[] = "ATH";
+    const char SetAthAvilable[] = "AT+CVHU=0";
     const char AtdTest[] = "ATD+79081460356;";
     const char VoiceCallBegin[] = "VOICE CALL: BEGIN";
     const char VoiceCallEnd[] = "VOICE CALL: END";
     const char NoCarrier[] = "NO CARRIER";
+    const char Ring[] = "RING";
+    const char MissedCall[] = "MISSED_CALL";
+
+    static constexpr size_t timeSize = 7;
+    static constexpr size_t numberSize = 12;
 
     enum ModuleEnableStatus {
         Disabled,
@@ -55,24 +63,29 @@ namespace ES::Driver {
         Failed
     };
 
+    enum PhoneStatus {
+        Idle,
+        OutgoingPreCall,
+        OutgoingCall,
+        IncomingCall,
+        IncomingPreCall
+    };
+
     enum ModuleStatus {
         None,
         WaitingStatus,
         WaitingAtCommandRepeat,
         WaitingReadyStatus,
         WaitingForOk,
-        WaitingForData,
-        Idle,
-        PreCall,
-        OutgoingCall,
-        IncomingCall
+        WaitingForData
     };
 
     enum DataType {
         GpsData,
         CopsData,
         NoneData,
-        CallData
+        CallData,
+        MissedCallData,
     };
 
     enum CardinalDirections {
@@ -162,7 +175,7 @@ namespace ES::Driver {
             while(counter--) {
                 if(_commandConfirmed.take(100)) {
                     _atCommandForCheck = nullptr;
-                    _moduleStatus = ModuleStatus::Idle;
+                    _moduleStatus = ModuleStatus::None;
                     return true;
                 }
             }
@@ -176,16 +189,15 @@ namespace ES::Driver {
                     return false;
                 }
                 _moduleStatus = ModuleStatus::WaitingForData;
-                _dataType = DataType::CopsData;
                 size_t counter = 20;
                 while(counter--) {
                     if(_dataRecieved.take(100)) {
-                        status = true;
+                        status = parseData(DataType::CopsData);
+                        _moduleStatus = ModuleStatus::None;
+                        break;
                     }  
                 }
             }
-            _moduleStatus = ModuleStatus::Idle;
-            _dataType = DataType::NoneData;
             return status;
         }
  
@@ -196,10 +208,7 @@ namespace ES::Driver {
             memcpy(tempBuf, AtCrLf, 2);
             memcpy(&tempBuf[2], s, size2);
             memcpy(&tempBuf[size2 + 2], AtCrLf, 2);
-            //return _uart.writeStream(_buffer.begin(), ++index);
-            //tatus = sendCrLf();
             status =_uart.writeStream(tempBuf, size2 + 4);
-            //status = sendCrLf();
             return CheckErrorCode::success(status);
         }
 
@@ -215,7 +224,6 @@ namespace ES::Driver {
                 }
                 else {
                     _recieveBuf[_bufIndex] = _recieveByte[0];
-                    _bufferEmpty = false;
                     nextRecieve();
                }
             }
@@ -236,8 +244,8 @@ namespace ES::Driver {
                 std::copy(std::begin(_recieveBuf), std::begin(_recieveBuf) + _bufIndex, std::begin(_parseBuf));
                 std::fill(_recieveBuf.begin(), std::begin(_recieveBuf) + _bufIndex, 0);
                 _bufIndex = 0;
+                _parserIndex = 0;
             }
-            _bufferEmpty = true;
             size_t bootDone = false;
             if(_enableStatus == ModuleEnableStatus::Disabled) {
                 if(checkAT(AtStatusRdy)) {
@@ -278,39 +286,53 @@ namespace ES::Driver {
                 if(checkAT(_atCommandForCheck)) {
                     _commandConfirmed.give();
                 }
+                if(_parserIndex != 0) {
+                    if(checkAT(AtStatusOk)) {
+                        _okRecieved.give();
+                    }
+                }
                 return;
             }
             if(_moduleStatus == ModuleStatus::WaitingForData) {
-                if(parseData()) {
-                    _dataRecieved.give();
-                }
-                _moduleStatus = ModuleStatus::Idle;
+                _dataRecieved.give();
+                _moduleStatus = ModuleStatus::None;
                 return;
             }
-            if(_moduleStatus == ModuleStatus::Idle) {
-                if(checkAT(_atCommandForCheck)) {
-                    //_moduleStatus = ModuleStatus::Ring;
-                    incomingCall.give();
+            if(_moduleStatus == ModuleStatus::None) {
+                if(_phoneStatus == PhoneStatus::Idle) {
+                    if(checkAT(Ring)) {
+                        _phoneStatus = PhoneStatus::IncomingPreCall;
+                        return;
+                    }
                 }
-                return;
             }
-            if(_moduleStatus == ModuleStatus::PreCall) {
+            if(_phoneStatus == PhoneStatus::IncomingPreCall) {
                 if(checkAT(VoiceCallBegin)) {
-                    _moduleStatus = ModuleStatus::OutgoingCall;
+                    _phoneStatus = PhoneStatus::IncomingCall;
+                    return;
+                }
+                if(checkAT(MissedCall)) {
+                    _phoneStatus = PhoneStatus::Idle;
+                    parseData(DataType::MissedCallData);
+                    return;
+                }
+            }
+            if(_phoneStatus == PhoneStatus::OutgoingPreCall) {
+                if(checkAT(VoiceCallBegin)) {
+                    _phoneStatus = PhoneStatus::OutgoingCall;
+                    return;
                 }
                 if(checkAT(NoCarrier)) {
-                    _moduleStatus = ModuleStatus::Idle;
+                    _phoneStatus = PhoneStatus::Idle;
+                    return;
                 }
-                return;
             }
-            if(_moduleStatus == ModuleStatus::OutgoingCall) {
+            if(_phoneStatus == PhoneStatus::OutgoingCall || _phoneStatus == PhoneStatus::IncomingCall) {
                 if(checkAT(VoiceCallEnd)) {
-                    _dataType = DataType::CallData;
-                    _moduleStatus = ModuleStatus::Idle;
-                    parseData();
-                    _dataType = DataType::NoneData;
+                    _phoneStatus = PhoneStatus::Idle;
+                    parseData(DataType::CallData);
+                    return;
                 }
-                return;
             }
         }
 
@@ -358,7 +380,6 @@ namespace ES::Driver {
                 _parserIndex++;
             }*/
             if(_parseBuf[_parserIndex] == 0) {
-                _bufferEmpty = true;
                 _parserIndex = 0;
             }
             return status;
@@ -401,14 +422,16 @@ namespace ES::Driver {
             size_t counter = 20;
             while(counter--) {
                 if(_dataRecieved.take(100)) {
+                    parseData(DataType::GpsData);
+
                     break;
                 }
             }
             return CheckErrorCode::success(status);
         }
 
-        bool parseData() {
-            if(_dataType == DataType::CopsData) {
+        bool parseData(DataType dataType) {
+            if(dataType == DataType::CopsData) {
                 bool status = false;
                 if(checkAT(AtCopsData)) {
                     _parserIndex++;
@@ -427,15 +450,30 @@ namespace ES::Driver {
                         status = true;
                     }
                     _parserIndex = 0;
-                    _dataType = DataType::NoneData;
                 }
             }
-            if(_dataType == DataType::CallData) {
+            if(dataType == DataType::CallData) {
                 _parserIndex++;
                 _callLengthSeconds = 0;
                 for(int i = 5; i > -1; i--) {
                     _callLengthSeconds += (_parseBuf[_parserIndex + i] - '0') * pow(10, 5 - i);
                 }
+            }
+            if(dataType == DataType::MissedCallData) {
+                size_t index = 0;
+                while(index < timeSize) {
+                    _parserIndex++;
+                    _missedCallTime[index] = _parseBuf[_parserIndex];
+                    index++;
+                }
+                _parserIndex++;
+                index = 0;
+                while(index < numberSize) {
+                    _parserIndex++;
+                    _missedCallNumber[index] = _parseBuf[_parserIndex];
+                    index++;
+                }
+                _parserIndex = 0;
             }
             return true;
         }
@@ -455,17 +493,38 @@ namespace ES::Driver {
             if(count == 0) {
                 return false;
             }
-            _moduleStatus = ModuleStatus::PreCall;
+            _phoneStatus = PhoneStatus::OutgoingPreCall;
+            return status;
+        }
+
+        bool disconnectCall() {
+            auto status = sendCommand(SetAthAvilable);
+            size_t count = 20;
+            _moduleStatus;
+            while(count--) {
+                if(_okRecieved.take(10)) {
+                    break;
+                }
+            }
+            if(count == 0) {
+                return false;
+            }
+            status = sendCommand(DisconnectCall);
+            _phoneStatus = PhoneStatus::Idle;
             return status;
         }
 
         bool answerCall() {
-            bool status = sendString(ATA, sizeof(ATA));
-            return CheckErrorCode::success(status);
+            bool status = sendCommand(AnswerCall);
+            return status;
         }
 
         ModuleStatus getStatus() {
             return _moduleStatus;
+        }
+
+        PhoneStatus getPhoneStatus() {
+            return _phoneStatus;
         }
 
         ModuleEnableStatus getEnableStatus() {
@@ -511,7 +570,11 @@ namespace ES::Driver {
         bool _callsAvailable = false;
         ATS _selectedTechnology;
 
+        bool _onCall = false;
         uint64_t _callLengthSeconds = 0;
+        
+        char _missedCallTime[timeSize];
+        char _missedCallNumber[numberSize];
 
         Timer::TimerNrf52 _timer;
         size_t _bufIndex = 0;
@@ -519,10 +582,8 @@ namespace ES::Driver {
         std::array<uint8_t, 1> _recieveByte;
         std::array<uint8_t, 128> _recieveBuf;
         std::array<uint8_t, 128> _parseBuf;
-        std::array<char, 128> _buffer;
         const char * _atCommandForCheck = nullptr;
 
-        bool _bufferEmpty = true;
         bool _onRecieve = false;
 
         bool _cPinReady = false;
@@ -534,7 +595,7 @@ namespace ES::Driver {
 
         ModuleEnableStatus _enableStatus = ModuleEnableStatus::Disabled;
         ModuleStatus _moduleStatus = ModuleStatus::None;
-        DataType _dataType = DataType::NoneData;
+        PhoneStatus _phoneStatus = PhoneStatus::Idle;
     };
 
 }
