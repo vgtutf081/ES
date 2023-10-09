@@ -13,5 +13,6 @@ target_sources(${PROJECT_NAME}
     ThreadFreeRtos/CriticalSection.h
     ThreadFreeRtos/Semaphore.h
     ThreadFreeRtos/FreeRtosQueue.h
+    ThreadFreeRtos/ThreadFreeRtos.cpp
 )
 

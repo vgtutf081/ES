@@ -1,14 +1,13 @@
 #pragma once
 
 #include "UarteNrf52.h"
-#include "GpioNrf52.h"
+#include "IGpio.h"
 #include "TimerNrf52.h"
 
-#include "FreeRTOS.h"
-#include "task.h"
-#include "semphr.h"
+//#include "FreeRTOS.h"
 #include "CriticalSection.h"
 #include "Semaphore.h"
+#include "ThreadFreeRtos.h"
 
 #include <array>
 #include <string>
@@ -18,126 +17,20 @@
 
 #include "CommonTools.h"
 
+#include "SIM7600AtCommands.h"
+#include "SIMTypes.h"
+
 namespace ES::Driver {
-
-    const char LF = 0X0A;
-    const char CR = 0X0D;
-    
-    const std::string AtCommandAt = "AT";
-    const char Tele2Operator[] = {'"', 'T', 'e', 'l', 'e', '2', ' ', 'T', 'e', 'l', 'e', '2', '"'};
-    const char AtCopsData[] = {'+', 'C', 'O', 'P', 'S', ':', ' '}; 
-    const char AtCopsRead[] = "AT+COPS?";
-    const char TestNumber[] = {'+','7','9','0','8','1','4','6','0','3','5','6'};
-    const char ATD[] = {'A', 'T', 'D'}; //make call
-    const char ATA[] = {'A', 'T', 'A'}; //answer call
-    const char AtCommandGpsEnable[] = {'A', 'T', '+',  'C', 'G', 'P', 'S', '=', '1'};
-    const char AtCommandGpsOk[] = {'A', 'T', '+',  'C', 'G', 'P', 'S', '=', '1', CR, CR, LF, 'O', 'K'};
-    const char AtCommandGpsInfo[] = {'A', 'T', '+',  'C', 'G', 'P', 'S', 'I', 'N', 'F', 'O'};
-    const char AtCommandGpsInfoOk[] = {'A', 'T', '+',  'C', 'G', 'P', 'S', 'I', 'N', 'F', 'O', '?'};
-    const char AtCommandGpsDisable[] = {'A', 'T', '+',  'C', 'G', 'P', 'S', '=', '0'};
-    const char AtStatusRdy[] = {'R', 'D', 'Y'};
-    const char AtCpinReady[] = {'+', 'C', 'P',  'I', 'N', ':', ' ', 'R', 'E', 'A', 'D', 'Y'};
-    const char AtSmsDone[] = {'S', 'M', 'S',  ' ', 'D', 'O', 'N', 'E'};
-    const char AtPbDone[] = {'P', 'B', ' ', 'D', 'O', 'N', 'E'};
-    const char AtStatusReady[] = {'R', 'E', 'A', 'D', 'Y'};
-    const char AtStatusOk[] = "OK";
-    const char AtCrLf[] = {CR, LF};
-
-    const char AnswerCall[] = "ATA";
-    const char DisconnectCall[] = "ATH";
-    const char SetAthAvilable[] = "AT+CVHU=0";
-    const char AtdTest[] = "ATD+79081460356;";
-    const char VoiceCallBegin[] = "VOICE CALL: BEGIN";
-    const char VoiceCallEnd[] = "VOICE CALL: END";
-    const char NoCarrier[] = "NO CARRIER";
-    const char Ring[] = "RING";
-    const char MissedCall[] = "MISSED_CALL";
-
+  
     static constexpr size_t timeSize = 7;
     static constexpr size_t numberSize = 12;
-
-    enum ModuleEnableStatus {
-        Disabled,
-        Enabled,
-        Boot,
-        Failed
-    };
-
-    enum PhoneStatus {
-        Idle,
-        OutgoingPreCall,
-        OutgoingCall,
-        IncomingCall,
-        IncomingPreCall
-    };
-
-    enum ModuleStatus {
-        None,
-        WaitingStatus,
-        WaitingAtCommandRepeat,
-        WaitingReadyStatus,
-        WaitingForOk,
-        WaitingForData
-    };
-
-    enum DataType {
-        GpsData,
-        CopsData,
-        NoneData,
-        CallData,
-        MissedCallData,
-    };
-
-    enum CardinalDirections {
-        North,
-        South,
-        East,
-        West
-    };
-
-    enum ATS : uint8_t {
-        Gsm  = 0,
-        GsmCOmpact = 1,
-        Utran = 2,
-        Eutran = 7,
-        Cdma_Hdr = 8
-    };
-
-    union Date {
-        uint8_t day;
-        uint8_t month;
-        uint16_t year;
-    };
-
-    union Time {
-        uint8_t hours;
-        uint8_t minutes;
-        uint16_t secondsMs;
-    };
-
-    struct GpsData {
-        public:
-
-        GpsData() = default;
-
-        float latitude;
-        CardinalDirections northSouth;
-        float longitude;
-        CardinalDirections eastWest;
-        Date date;
-        Time time;
-        float altitude;
-        float speed;
-        float course;
-    };
-    
 
     class Sim7600x {
     public:
 
         uint8_t counterTest = 0;
 
-        Sim7600x(Uarte::UarteNrf uart, Timer::TimerNrf52 timer, Gpio::Nrf52Gpio nDisable/*, Gpio::Nrf52Gpio nReset, Gpio::Nrf52Gpio levelConvEn, Gpio::Nrf52Gpio modulePowerEn, Gpio::Nrf52Gpio ldo1V8En*/) : _uart(uart), _nDisable(nDisable), _timer(timer)/*, _nReset(nReset), _levelConvEn(levelConvEn), _modulePowerEn(modulePowerEn), _ldo1V8En(ldo1V8En) */{
+        Sim7600x(Uarte::UarteNrf uart, Timer::TimerNrf52 timer, Gpio::IGpio &nDisable/*, Gpio::Nrf52Gpio nReset, Gpio::Nrf52Gpio levelConvEn, Gpio::Nrf52Gpio modulePowerEn, Gpio::Nrf52Gpio ldo1V8En*/) : _uart(uart), _nDisable(nDisable), _timer(timer)/*, _nReset(nReset), _levelConvEn(levelConvEn), _modulePowerEn(modulePowerEn), _ldo1V8En(ldo1V8En) */{
 
         }
 
@@ -151,19 +44,19 @@ namespace ES::Driver {
             _nDisable.set();
             _enableStatus = ModuleEnableStatus::Disabled;
             while(_enableStatus != ModuleEnableStatus::Enabled) {
-                vTaskDelay(100);
+                Threading::sleepForMs(100);
             }
         }
 
         void disableModule() {
             _nDisable.reset(); //TODO invert
-            vTaskDelay(50);
+            Threading::sleepForMs(50);
             //_modulePowerEn.reset();
         }
 
         void resetModule() {
             //_nReset.set();
-            vTaskDelay(100);
+            Threading::sleepForMs(100);
             //_nReset.reset();
         }
 
@@ -560,7 +453,7 @@ namespace ES::Driver {
         Threading::BinarySemaphore _okRecieved;
 
         Uarte::UarteNrf _uart;
-        Gpio::Nrf52Gpio _nDisable;
+        Gpio::IGpio &_nDisable;
         //Gpio::Nrf52Gpio _nReset;
         //Gpio::Nrf52Gpio _levelConvEn;
         //Gpio::Nrf52Gpio _modulePowerEn;

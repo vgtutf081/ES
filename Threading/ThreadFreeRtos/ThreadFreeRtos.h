@@ -1,4 +1,5 @@
 #pragma once
+
 #include <functional>
 #include <cstddef>
 #include <cstdint>
@@ -8,13 +9,28 @@
 
 namespace ES::Threading {
 
-    inline void yield() {
-		taskYIELD();
-	}
+    enum class ThreadPriority : uint32_t {
+        Idle,
+        Low,
+        BelowNormal,
+        Normal,
+        AboveNormal,
+        High,
+        Realtime,
+        Error
+    };
+
+    using ID = TaskHandle_t;
+
+    ID getId();
+    ThreadPriority getPriority();
+    void setPriority(ThreadPriority priority);
+    void sleepForMs(size_t milliseconds);
+    void yield();
     
     class Thread {
     public:
-        explicit Thread(const char* name, uint16_t stackSize, uint32_t priority, std::function<void()>&& body) : _body(std::move(body)) {
+        explicit Thread(const char* name, uint16_t stackSize, ThreadPriority priority, std::function<void()>&& body) : _body(std::move(body)) {
             auto status = xTaskCreate(staticTaskHandler, name, stackSize, this, (UBaseType_t)priority, &_taskHandle);
     
         }

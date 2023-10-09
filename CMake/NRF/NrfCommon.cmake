@@ -32,11 +32,11 @@ target_link_options(NRF INTERFACE
 
 target_compile_definitions(NRF INTERFACE
     NRF
-    NRF52840_XXAA
+    #NRF52840_XXAA
     #BSP_DEFINES_ONLY
-    CONFIG_GPIO_AS_PINRESET
+    #CONFIG_GPIO_AS_PINRESET
     FLOAT_ABI_HARD
-    FREERTOS
-    USE_APP_CONFIG
+    #FREERTOS
+    #USE_APP_CONFIG
     #"__weak=__attribute__((weak))"
 )

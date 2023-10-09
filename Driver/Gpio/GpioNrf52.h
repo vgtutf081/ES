@@ -7,9 +7,9 @@
 
 namespace ES::Driver::Gpio {
 
-    struct Nrf52Gpio : public IGpio {
+    class Nrf52Gpio : public IGpio {
     public:
-        Nrf52Gpio(uint32_t portPin) : _portPin(portPin) {
+        explicit Nrf52Gpio(uint32_t portPin) : _portPin(portPin) {
 
             //nrf_gpio_cfg(_portPin, static_cast<nrf_gpio_pin_dir_t>(dir), NRF_GPIO_PIN_INPUT_DISCONNECT, static_cast<nrf_gpio_pin_pull_t>(pull), static_cast<nrf_gpio_pin_drive_t>(drive), NRF_GPIO_PIN_NOSENSE);
         }
@@ -40,23 +40,23 @@ namespace ES::Driver::Gpio {
             nrfx_gpiote_in_event_enable(_portPin, true);
         }
 
-        void set() {
+        void set() override {
             nrf_gpio_pin_set(_portPin);
         }
 
-        void reset() {
+        void reset() override {
             nrf_gpio_pin_clear(_portPin);
         }
 
-        void toggle() {
+        void toggle() override {
             nrf_gpio_pin_toggle(_portPin);
         }
 
-        bool read() {
+        bool read() override {
             return nrf_gpio_pin_read(_portPin);
         }
 
-        void disable() {
+        void disable() override {
             nrf_gpio_input_disconnect(_portPin);
         }
 

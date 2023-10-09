@@ -7,11 +7,13 @@ target_include_directories(${LIBRARY_NAME}
         "${CMAKE_CURRENT_SOURCE_DIR}"
 	#"${CMAKE_CURRENT_SOURCE_DIR}"
         "${CMAKE_CURRENT_SOURCE_DIR}/Gpio"
+        "${CMAKE_CURRENT_SOURCE_DIR}/Gpio/Extender"
         "${CMAKE_CURRENT_SOURCE_DIR}/Uart"
         "${CMAKE_CURRENT_SOURCE_DIR}/GsmModule"
         "${CMAKE_CURRENT_SOURCE_DIR}/Timer"        
         "${CMAKE_CURRENT_SOURCE_DIR}/MotorControl" 
         "${CMAKE_CURRENT_SOURCE_DIR}/Adc" 
+        "${CMAKE_CURRENT_SOURCE_DIR}/I2C" 
 )
 
 #source
@@ -25,14 +27,20 @@ target_sources(${LIBRARY_NAME}
     ${CMAKE_CURRENT_SOURCE_DIR}/Gpio/GpioNrfModes.h
     ${CMAKE_CURRENT_SOURCE_DIR}/Gpio/GpioteNrf52.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/Gpio/GpioteNrf52.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/Gpio/Extender/ExtenderPin.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/Gpio/Extender/PCA9554.h
     ${CMAKE_CURRENT_SOURCE_DIR}/Gpio/IGpio.h
     ${CMAKE_CURRENT_SOURCE_DIR}/MotorControl/DRV8328.h
     ${CMAKE_CURRENT_SOURCE_DIR}/Uart/UarteNrf52.h
     ${CMAKE_CURRENT_SOURCE_DIR}/GsmModule/SIM7600x.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/GsmModule/SIM7600AtCommands.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/GsmModule/SIMTypes.h
     ${CMAKE_CURRENT_SOURCE_DIR}/GsmModule/SIM7600x.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/Timer/TimerNrf52.h
     ${CMAKE_CURRENT_SOURCE_DIR}/Timer/TimerCh32.h
     ${CMAKE_CURRENT_SOURCE_DIR}/Timer/ITimer.h
     ${CMAKE_CURRENT_SOURCE_DIR}/Adc/AdcCh32v.h
     ${CMAKE_CURRENT_SOURCE_DIR}/Adc/IAdc.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/I2C/II2C.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/I2C/I2CNrf52.h
 )
