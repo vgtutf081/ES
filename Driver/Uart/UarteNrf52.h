@@ -7,8 +7,6 @@
 
 #include "ThreadFreeRtos.h"
 
-#include "PinMap.h"
-
 namespace ES::Driver::Uarte {
 
     class UarteNrf {

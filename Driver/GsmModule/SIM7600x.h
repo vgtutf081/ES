@@ -1,123 +1,36 @@
 #pragma once
 
 #include "UarteNrf52.h"
-#include "GpioNrf52.h"
+#include "IGpio.h"
 #include "TimerNrf52.h"
 
-#include "FreeRTOS.h"
-#include "task.h"
-#include "semphr.h"
+//#include "FreeRTOS.h"
 #include "CriticalSection.h"
 #include "Semaphore.h"
+#include "ThreadFreeRtos.h"
 
 #include <array>
 #include <string>
+#include <cmath>
 
 #include "nrf_check_ret.h"
 
 #include "CommonTools.h"
 
+#include "SIM7600AtCommands.h"
+#include "SIMTypes.h"
+
 namespace ES::Driver {
-
-    const char LF = 0X0A;
-    const char CR = 0X0D;
-    
-    const std::string AtCommandAt = "AT";
-    const char Tele2Operator[] = {'"', 'T', 'e', 'l', 'e', '2', ' ', 'T', 'e', 'l', 'e', '2', '"'};
-    const char AtCopsData[] = {'+', 'C', 'O', 'P', 'S', ':', ' '}; 
-    const char AtCopsRead[] = "AT+COPS?";
-    const char TestNumber[] = {'+','7','9','0','8','1','4','6','0','3','5','6'};
-    const char ATD[] = {'A', 'T', 'D'}; //make call
-    const char ATA[] = {'A', 'T', 'A'}; //answer call
-    const char AtCommandGpsEnable[] = {'A', 'T', '+',  'C', 'G', 'P', 'S', '=', '1'};
-    const char AtCommandGpsOk[] = {'A', 'T', '+',  'C', 'G', 'P', 'S', '=', '1', CR, CR, LF, 'O', 'K'};
-    const char AtCommandGpsInfo[] = {'A', 'T', '+',  'C', 'G', 'P', 'S', 'I', 'N', 'F', 'O'};
-    const char AtCommandGpsInfoOk[] = {'A', 'T', '+',  'C', 'G', 'P', 'S', 'I', 'N', 'F', 'O', '?'};
-    const char AtCommandGpsDisable[] = {'A', 'T', '+',  'C', 'G', 'P', 'S', '=', '0'};
-    const char AtStatusRdy[] = {'R', 'D', 'Y'};
-    const char AtCpinReady[] = {'+', 'C', 'P',  'I', 'N', ':', ' ', 'R', 'E', 'A', 'D', 'Y'};
-    const char AtSmsDone[] = {'S', 'M', 'S',  ' ', 'D', 'O', 'N', 'E'};
-    const char AtPbDone[] = {'P', 'B', ' ', 'D', 'O', 'N', 'E'};
-    const char AtStatusReady[] = {'R', 'E', 'A', 'D', 'Y'};
-    const char AtStatusOk[] = "OK";
-    const char AtCrLf[] = {CR, LF};
-
-    const char AtdTest[] = "ATD+79081460356;";
-
-    enum ModuleEnableStatus {
-        Disabled,
-        Enabled,
-        Boot,
-        Failed
-    };
-
-    enum ModuleStatus {
-        None,
-        WaitingStatus,
-        WaitingAtCommandRepeat,
-        WaitingReadyStatus,
-        WaitingForData,
-        Idle,
-        OutgoingCall,
-        IncomingCall
-    };
-
-    enum DataType {
-        GpsData,
-        CopsData,
-        NoneData
-    };
-
-    enum CardinalDirections {
-        North,
-        South,
-        East,
-        West
-    };
-
-    enum ATS : uint8_t {
-        Gsm  = 0,
-        GsmCOmpact = 1,
-        Utran = 2,
-        Eutran = 7,
-        Cdma_Hdr = 8
-    };
-
-    union Date {
-        uint8_t day;
-        uint8_t month;
-        uint16_t year;
-    };
-
-    union Time {
-        uint8_t hours;
-        uint8_t minutes;
-        uint16_t secondsMs;
-    };
-
-    struct GpsData {
-        public:
-
-        GpsData() = default;
-
-        float latitude;
-        CardinalDirections northSouth;
-        float longitude;
-        CardinalDirections eastWest;
-        Date date;
-        Time time;
-        float altitude;
-        float speed;
-        float course;
-    };
-    
+  
+    static constexpr size_t timeSize = 7;
+    static constexpr size_t numberSize = 12;
 
     class Sim7600x {
     public:
 
         uint8_t counterTest = 0;
 
-        Sim7600x(Uarte::UarteNrf uart, Timer::TimerNrf52 timer, Gpio::Nrf52Gpio nDisable/*, Gpio::Nrf52Gpio nReset, Gpio::Nrf52Gpio levelConvEn, Gpio::Nrf52Gpio modulePowerEn, Gpio::Nrf52Gpio ldo1V8En*/) : _uart(uart), _nDisable(nDisable), _timer(timer)/*, _nReset(nReset), _levelConvEn(levelConvEn), _modulePowerEn(modulePowerEn), _ldo1V8En(ldo1V8En) */{
+        Sim7600x(Uarte::UarteNrf uart, Timer::TimerNrf52 timer, Gpio::IGpio &nDisable/*, Gpio::Nrf52Gpio nReset, Gpio::Nrf52Gpio levelConvEn, Gpio::Nrf52Gpio modulePowerEn, Gpio::Nrf52Gpio ldo1V8En*/) : _uart(uart), _nDisable(nDisable), _timer(timer)/*, _nReset(nReset), _levelConvEn(levelConvEn), _modulePowerEn(modulePowerEn), _ldo1V8En(ldo1V8En) */{
 
         }
 
@@ -131,19 +44,19 @@ namespace ES::Driver {
             _nDisable.set();
             _enableStatus = ModuleEnableStatus::Disabled;
             while(_enableStatus != ModuleEnableStatus::Enabled) {
-                vTaskDelay(100);
+                Threading::sleepForMs(100);
             }
         }
 
         void disableModule() {
             _nDisable.reset(); //TODO invert
-            vTaskDelay(50);
+            Threading::sleepForMs(50);
             //_modulePowerEn.reset();
         }
 
         void resetModule() {
             //_nReset.set();
-            vTaskDelay(100);
+            Threading::sleepForMs(100);
             //_nReset.reset();
         }
 
@@ -155,7 +68,7 @@ namespace ES::Driver {
             while(counter--) {
                 if(_commandConfirmed.take(100)) {
                     _atCommandForCheck = nullptr;
-                    _moduleStatus = ModuleStatus::Idle;
+                    _moduleStatus = ModuleStatus::None;
                     return true;
                 }
             }
@@ -165,20 +78,19 @@ namespace ES::Driver {
         bool checkCallsAvailability() {
             bool status = false;
             if(_enableStatus == ModuleEnableStatus::Enabled) {
-                if(sendCommand(AtCopsRead)) {
+                if(!sendCommand(AtCopsRead)) {
                     return false;
                 }
                 _moduleStatus = ModuleStatus::WaitingForData;
-                _dataType = DataType::CopsData;
                 size_t counter = 20;
                 while(counter--) {
                     if(_dataRecieved.take(100)) {
-                        status = true;
+                        status = parseData(DataType::CopsData);
+                        _moduleStatus = ModuleStatus::None;
+                        break;
                     }  
                 }
             }
-            _moduleStatus = ModuleStatus::Idle;
-            _dataType = DataType::NoneData;
             return status;
         }
  
@@ -187,12 +99,9 @@ namespace ES::Driver {
             size_t size2 = CommonTools::charArraySize(s);
             char tempBuf[128];
             memcpy(tempBuf, AtCrLf, 2);
-            memcpy(&tempBuf[2], s, size);
-            memcpy(&tempBuf[size + 2], AtCrLf, 2);
-            //return _uart.writeStream(_buffer.begin(), ++index);
-            //tatus = sendCrLf();
-            status =_uart.writeStream(tempBuf, size + 4);
-            //status = sendCrLf();
+            memcpy(&tempBuf[2], s, size2);
+            memcpy(&tempBuf[size2 + 2], AtCrLf, 2);
+            status =_uart.writeStream(tempBuf, size2 + 4);
             return CheckErrorCode::success(status);
         }
 
@@ -208,7 +117,6 @@ namespace ES::Driver {
                 }
                 else {
                     _recieveBuf[_bufIndex] = _recieveByte[0];
-                    _bufferEmpty = false;
                     nextRecieve();
                }
             }
@@ -229,8 +137,8 @@ namespace ES::Driver {
                 std::copy(std::begin(_recieveBuf), std::begin(_recieveBuf) + _bufIndex, std::begin(_parseBuf));
                 std::fill(_recieveBuf.begin(), std::begin(_recieveBuf) + _bufIndex, 0);
                 _bufIndex = 0;
+                _parserIndex = 0;
             }
-            _bufferEmpty = true;
             size_t bootDone = false;
             if(_enableStatus == ModuleEnableStatus::Disabled) {
                 if(checkAT(AtStatusRdy)) {
@@ -261,25 +169,63 @@ namespace ES::Driver {
                 }
                 return;
             }
+            if(_moduleStatus == ModuleStatus::WaitingForOk) {
+                if(checkAT(AtStatusOk)) {
+                    _okRecieved.give();
+                }
+                return;
+            }
             if(_moduleStatus == ModuleStatus::WaitingAtCommandRepeat) {
                 if(checkAT(_atCommandForCheck)) {
                     _commandConfirmed.give();
                 }
+                if(_parserIndex != 0) {
+                    if(checkAT(AtStatusOk)) {
+                        _okRecieved.give();
+                    }
+                }
                 return;
             }
             if(_moduleStatus == ModuleStatus::WaitingForData) {
-                if(parseData()) {
-                    _dataRecieved.give();
-                }
-                _moduleStatus = ModuleStatus::Idle;
+                _dataRecieved.give();
+                _moduleStatus = ModuleStatus::None;
                 return;
             }
-            if(_moduleStatus == ModuleStatus::Idle) {
-                if(checkAT(_atCommandForCheck)) {
-                    //_moduleStatus = ModuleStatus::Ring;
-                    incomingCall.give();
+            if(_moduleStatus == ModuleStatus::None) {
+                if(_phoneStatus == PhoneStatus::Idle) {
+                    if(checkAT(Ring)) {
+                        _phoneStatus = PhoneStatus::IncomingPreCall;
+                        return;
+                    }
                 }
-                return;
+            }
+            if(_phoneStatus == PhoneStatus::IncomingPreCall) {
+                if(checkAT(VoiceCallBegin)) {
+                    _phoneStatus = PhoneStatus::IncomingCall;
+                    return;
+                }
+                if(checkAT(MissedCall)) {
+                    _phoneStatus = PhoneStatus::Idle;
+                    parseData(DataType::MissedCallData);
+                    return;
+                }
+            }
+            if(_phoneStatus == PhoneStatus::OutgoingPreCall) {
+                if(checkAT(VoiceCallBegin)) {
+                    _phoneStatus = PhoneStatus::OutgoingCall;
+                    return;
+                }
+                if(checkAT(NoCarrier)) {
+                    _phoneStatus = PhoneStatus::Idle;
+                    return;
+                }
+            }
+            if(_phoneStatus == PhoneStatus::OutgoingCall || _phoneStatus == PhoneStatus::IncomingCall) {
+                if(checkAT(VoiceCallEnd)) {
+                    _phoneStatus = PhoneStatus::Idle;
+                    parseData(DataType::CallData);
+                    return;
+                }
             }
         }
 
@@ -297,12 +243,16 @@ namespace ES::Driver {
 
         bool checkAT(const char* s) {
             bool status = true;
+            skipCrLf();
+            /*if(_parseBuf[_parserIndex] == CR) {
+                _parserIndex++;
+            }
             if(_parseBuf[_parserIndex] == CR) {
                 _parserIndex++;
             }
             if(_parseBuf[_parserIndex] == LF) {
                 _parserIndex++;
-            }
+            }*/
             for(uint8_t i = 0; _parseBuf[_parserIndex] != CR; _parserIndex++, i++) {
                 if(s[i] == '\0') {
                     break;
@@ -312,14 +262,26 @@ namespace ES::Driver {
                 }
             }
             _parserIndex++;
-            if(_parseBuf[_parserIndex] == LF) {
+            skipCrLf();
+            /*if(_parseBuf[_parserIndex] == CR) {
                 _parserIndex++;
             }
+            if(_parseBuf[_parserIndex] == CR) {
+                _parserIndex++;
+            }
+            if(_parseBuf[_parserIndex] == LF) {
+                _parserIndex++;
+            }*/
             if(_parseBuf[_parserIndex] == 0) {
-                _bufferEmpty = true;
                 _parserIndex = 0;
             }
             return status;
+        }
+
+        void skipCrLf() {
+            while(_parseBuf[_parserIndex] == CR || _parseBuf[_parserIndex] == LF) {
+                _parserIndex++;
+            }
         }
 
         bool enableGps() {
@@ -353,14 +315,16 @@ namespace ES::Driver {
             size_t counter = 20;
             while(counter--) {
                 if(_dataRecieved.take(100)) {
+                    parseData(DataType::GpsData);
+
                     break;
                 }
             }
             return CheckErrorCode::success(status);
         }
 
-        bool parseData() {
-            if(_dataType == DataType::CopsData) {
+        bool parseData(DataType dataType) {
+            if(dataType == DataType::CopsData) {
                 bool status = false;
                 if(checkAT(AtCopsData)) {
                     _parserIndex++;
@@ -379,25 +343,81 @@ namespace ES::Driver {
                         status = true;
                     }
                     _parserIndex = 0;
-                    _dataType = DataType::NoneData;
                 }
-                return status;
             }
+            if(dataType == DataType::CallData) {
+                _parserIndex++;
+                _callLengthSeconds = 0;
+                for(int i = 5; i > -1; i--) {
+                    _callLengthSeconds += (_parseBuf[_parserIndex + i] - '0') * pow(10, 5 - i);
+                }
+            }
+            if(dataType == DataType::MissedCallData) {
+                size_t index = 0;
+                while(index < timeSize) {
+                    _parserIndex++;
+                    _missedCallTime[index] = _parseBuf[_parserIndex];
+                    index++;
+                }
+                _parserIndex++;
+                index = 0;
+                while(index < numberSize) {
+                    _parserIndex++;
+                    _missedCallNumber[index] = _parseBuf[_parserIndex];
+                    index++;
+                }
+                _parserIndex = 0;
+            }
+            return true;
         }
 
         bool makeCall() {
-            auto status = sendString(AtdTest, sizeof(AtdTest));
+            auto status = sendCommand(AtdTest);
+            if(!status) {
+                return false;
+            }
+            size_t count = 20;
+            _moduleStatus = ModuleStatus::WaitingForOk;
+            while(count--) {
+                if(_okRecieved.take(100)) {
+                    break;
+                }
+            }
+            if(count == 0) {
+                return false;
+            }
+            _phoneStatus = PhoneStatus::OutgoingPreCall;
+            return status;
+        }
 
-            return CheckErrorCode::success(status);
+        bool disconnectCall() {
+            auto status = sendCommand(SetAthAvilable);
+            size_t count = 20;
+            _moduleStatus;
+            while(count--) {
+                if(_okRecieved.take(10)) {
+                    break;
+                }
+            }
+            if(count == 0) {
+                return false;
+            }
+            status = sendCommand(DisconnectCall);
+            _phoneStatus = PhoneStatus::Idle;
+            return status;
         }
 
         bool answerCall() {
-            bool status = sendString(ATA, sizeof(ATA));
-            return CheckErrorCode::success(status);
+            bool status = sendCommand(AnswerCall);
+            return status;
         }
 
         ModuleStatus getStatus() {
             return _moduleStatus;
+        }
+
+        PhoneStatus getPhoneStatus() {
+            return _phoneStatus;
         }
 
         ModuleEnableStatus getEnableStatus() {
@@ -430,9 +450,10 @@ namespace ES::Driver {
         Threading::BinarySemaphore _readyStatusRecieved;
         Threading::BinarySemaphore _commandConfirmed;
         Threading::BinarySemaphore _dataRecieved;
+        Threading::BinarySemaphore _okRecieved;
 
         Uarte::UarteNrf _uart;
-        Gpio::Nrf52Gpio _nDisable;
+        Gpio::IGpio &_nDisable;
         //Gpio::Nrf52Gpio _nReset;
         //Gpio::Nrf52Gpio _levelConvEn;
         //Gpio::Nrf52Gpio _modulePowerEn;
@@ -442,16 +463,20 @@ namespace ES::Driver {
         bool _callsAvailable = false;
         ATS _selectedTechnology;
 
+        bool _onCall = false;
+        uint64_t _callLengthSeconds = 0;
+        
+        char _missedCallTime[timeSize];
+        char _missedCallNumber[numberSize];
+
         Timer::TimerNrf52 _timer;
         size_t _bufIndex = 0;
         uint8_t _parserIndex = 0;
         std::array<uint8_t, 1> _recieveByte;
         std::array<uint8_t, 128> _recieveBuf;
         std::array<uint8_t, 128> _parseBuf;
-        std::array<char, 128> _buffer;
         const char * _atCommandForCheck = nullptr;
 
-        bool _bufferEmpty = true;
         bool _onRecieve = false;
 
         bool _cPinReady = false;
@@ -463,7 +488,7 @@ namespace ES::Driver {
 
         ModuleEnableStatus _enableStatus = ModuleEnableStatus::Disabled;
         ModuleStatus _moduleStatus = ModuleStatus::None;
-        DataType _dataType = DataType::NoneData;
+        PhoneStatus _phoneStatus = PhoneStatus::Idle;
     };
 
 }

@@ -5,5 +5,4 @@
 #include "GpioCh32Modes.h"
 #elif defined (NRF)
 #include "GpioNrfModes.h"
-#include "GpioNrf52.h"
 #endif
