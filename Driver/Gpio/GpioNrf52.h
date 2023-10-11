@@ -60,7 +60,7 @@ namespace ES::Driver::Gpio {
             nrf_gpio_input_disconnect(_portPin);
         }
 
-        uint32_t getPin() override {
+        uint32_t getPin() {
             return _portPin;
         }
 

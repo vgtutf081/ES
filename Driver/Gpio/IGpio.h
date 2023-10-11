@@ -20,7 +20,7 @@ namespace ES::Driver::Gpio {
 
         virtual void disable() = 0;
 
-        virtual uint32_t getPin() = 0;
+        //virtual uint32_t getPin() = 0;
 
         virtual void setMode(PinMode mode, DriveMode driveMode, PullMode pullMode) = 0;
 
