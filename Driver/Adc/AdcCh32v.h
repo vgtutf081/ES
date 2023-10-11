@@ -70,15 +70,15 @@ namespace ES::Driver::Adc {
             RCC_APB2PeriphClockCmd(RCC_APB2Periph_ADC1, ENABLE);
             RCC_ADCCLKConfig(RCC_PCLK2_Div2);
 
+            GPIO_InitStructure.GPIO_Pin = GPIO_Pin_0;
+            GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AIN;
+            GPIO_Init(GPIOA, &GPIO_InitStructure);
+
             GPIO_InitStructure.GPIO_Pin = GPIO_Pin_3;
             GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AIN;
             GPIO_Init(GPIOA, &GPIO_InitStructure);
 
             GPIO_InitStructure.GPIO_Pin = GPIO_Pin_4;
-            GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AIN;
-            GPIO_Init(GPIOA, &GPIO_InitStructure);
-
-            GPIO_InitStructure.GPIO_Pin = GPIO_Pin_6;
             GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AIN;
             GPIO_Init(GPIOA, &GPIO_InitStructure);
 
@@ -92,9 +92,9 @@ namespace ES::Driver::Adc {
             ADC_Init(ADC1, &ADC_InitStructure);
 
             ADC_InjectedSequencerLengthConfig(ADC1, 3);
-            ADC_InjectedChannelConfig(ADC1, ADC_Channel_3, 1, ADC_SampleTime_71Cycles5);
-            ADC_InjectedChannelConfig(ADC1, ADC_Channel_4, 2, ADC_SampleTime_71Cycles5);
-            ADC_InjectedChannelConfig(ADC1, ADC_Channel_6, 3, ADC_SampleTime_71Cycles5);
+            ADC_InjectedChannelConfig(ADC1, ADC_Channel_0, 1, ADC_SampleTime_71Cycles5);
+            ADC_InjectedChannelConfig(ADC1, ADC_Channel_3, 2, ADC_SampleTime_71Cycles5);
+            ADC_InjectedChannelConfig(ADC1, ADC_Channel_4, 3, ADC_SampleTime_71Cycles5);
 
             ADC_DiscModeChannelCountConfig(ADC1, 1);
             //ADC_InjectedDiscModeCmd(ADC1, ENABLE);

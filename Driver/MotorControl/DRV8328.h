@@ -3,7 +3,7 @@
 #include "IGpio.h"
 #include "ITimer.h"
 #include "AdcCh32v.h"
-#include "BinarySemaphore.h"
+#include "Semaphore.h"
 
 namespace ES::Driver::MotorControl {
 
@@ -30,9 +30,9 @@ namespace ES::Driver::MotorControl {
     class Drv8328 {
     public:
         Drv8328(Gpio::IGpio& nSleep, Gpio::IGpio& nFault, Timer::PwmCh32v& pwmA, Timer::PwmCh32v& pwmB, Timer::PwmCh32v& pwmC, Adc::AdcCh32vSingleEnded& adcA, Adc::AdcCh32vSingleEnded& adcB, Adc::AdcCh32vSingleEnded& adcC) : _nSleep(nSleep), _nFault(nFault), _pwmA(pwmA), _pwmB(pwmB), _pwmC(pwmC), _adcA(adcA), _adcB(adcB), _adcC(adcC) {
-            _pwmA.setParams(_freq, 0.2f);
-            _pwmB.setParams(_freq, 0.2f);
-            _pwmC.setParams(_freq, 0.2f);
+            _pwmA.setParams(_freq, 0.25f);
+            _pwmB.setParams(_freq, 0.25f);
+            _pwmC.setParams(_freq, 0.25f);
             _nSleep.configureOutput();
             _nSleep.reset();
             _nFault.configureInput(Gpio::PullMode::Up);
@@ -78,49 +78,49 @@ namespace ES::Driver::MotorControl {
         void nextStep() {
             steps++;
             if(_nextStep == BldcStep::ChAl) {
+                deCommutate(_pwmB);
                 commutateHigh(_pwmC);
                 commutateLow(_pwmA);
-                deCommutate(_pwmB);
                 _nextStep = BldcStep::ChBl;
                 _bemfPhase = MotorPhase::B;
                 _bemfEdge = BemfEdge::Falling;
             }
             else if(_nextStep == BldcStep::ChBl) {
+                deCommutate(_pwmA);
                 commutateHigh(_pwmC);
                 commutateLow(_pwmB);
-                deCommutate(_pwmA);
                 _nextStep = BldcStep::AhBl;
                 _bemfPhase = MotorPhase::A;
                 _bemfEdge = BemfEdge::Rising;
             }
             else if(_nextStep == BldcStep::AhBl) {
+                deCommutate(_pwmC);
                 commutateHigh(_pwmA);
                 commutateLow(_pwmB);
-                deCommutate(_pwmC);
                 _nextStep = BldcStep::AhCl;
                 _bemfPhase = MotorPhase::C;
                 _bemfEdge = BemfEdge::Falling;
             }
             else if(_nextStep == BldcStep::AhCl) {
+                deCommutate(_pwmB);
                 commutateHigh(_pwmA);
                 commutateLow(_pwmC);
-                deCommutate(_pwmB);
                 _nextStep = BldcStep::BhCl;
                 _bemfPhase = MotorPhase::B;
                 _bemfEdge = BemfEdge::Rising;
             }
             else if(_nextStep == BldcStep::BhCl) {
+                deCommutate(_pwmA);
                 commutateHigh(_pwmB);
                 commutateLow(_pwmC);
-                deCommutate(_pwmA);
                 _nextStep = BldcStep::BhAl;
                 _bemfPhase = MotorPhase::A;
                 _bemfEdge = BemfEdge::Falling;
             }
             else if(_nextStep == BldcStep::BhAl) {
+                deCommutate(_pwmC);
                 commutateHigh(_pwmB);
                 commutateLow(_pwmA);
-                deCommutate(_pwmC);
                 _nextStep = BldcStep::ChAl;
                 _bemfPhase = MotorPhase::C;
                 _bemfEdge = BemfEdge::Rising;

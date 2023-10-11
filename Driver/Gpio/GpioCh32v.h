@@ -33,7 +33,7 @@ namespace ES::Driver::Gpio {
 
         }
 
-        constexpr uint16_t getPin() const {
+        constexpr uint16_t getPin() const  {
             return _pin;
         }
 
