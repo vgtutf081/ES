@@ -150,69 +150,23 @@ namespace ES::Driver::MotorControl {
             vTaskDelay(200000);
 
             _stepCommutationTimer.setIrq(0);
-            for(int temp = 6; temp != 0; temp--) {
-                nextStep();
-                vTaskDelay(100000);
-            }
-                for(int temp = 6; temp != 0; temp--) {
-                nextStep();
-                vTaskDelay(50000);
-            }
-                for(int temp = 6; temp != 0; temp--) {
-                nextStep();
-                vTaskDelay(30000);
-            }
-                for(int temp = 6; temp != 0; temp--) {
-                nextStep();
-                vTaskDelay(10000);
-            }
-                for(int temp = 6; temp != 0; temp--) {
-                nextStep();
-                vTaskDelay(5000);
-            }
-
-            for(int temp = 200; temp != 0; temp--) {
-                nextStep();
-                vTaskDelay(2500);
-            }
 
             
-            for(int temp = 500; temp != 0; temp--) {
+            _currentPeriodUs = _openLoopStartPeriodUs;
+            while(_currentPeriodUs > _openLoopEndPeriodUs) {
+                vTaskDelay(_openLoopEndPeriodUs);
+                _currentPeriodUs /= 1.1f;
                 nextStep();
-                vTaskDelay(2000);
             }
 
-            for(int temp = 500; temp != 0; temp--) {
-                nextStep();
-                vTaskDelay(1700);
-            }
-
-            for(int temp = 500; temp != 0; temp--) {
-                nextStep();
-                vTaskDelay(1500);
-            }
-
-            /*for(int temp = 500; temp != 0; temp--) {
-                nextStep();
-                vTaskDelay(1300);
-            }*/
-
-            /*for(int temp = 500; temp != 0; temp--) {
-                nextStep();
-                vTaskDelay(1100);
-            }*/
-
-            /*for(int temp = 500; temp != 0; temp--) {
-                nextStep();
-                vTaskDelay(900);
-            }*/
 
             int delay = 1800;
-            nextStep();
+            //nextStep();
             _measureTimer.stop();
             _measureTimer.setCounter(0);
             _measureTimer.start();
-            //_stepCommutationTimer.start();
+            _stepCommutationTimer.setPeriod(_openLoopEndPeriodUs);
+            _stepCommutationTimer.start();
             _adc.enable();
             _drv._timComplimentary.setIrq(0);
             _adcFlag = true;
@@ -294,9 +248,9 @@ namespace ES::Driver::MotorControl {
         bool _adcFlag = false;
         bool _bemfFlag = false;
         bool _openLoop = false;
-        static constexpr uint32_t _openLoopEndPeriodUs = 2000;
-        static constexpr uint32_t _openLoopStartPeriodUs = 50000;
-        int _currentPeriodUs = 1100;
+        static constexpr uint32_t _openLoopEndPeriodUs = 1000;
+        static constexpr uint32_t _openLoopStartPeriodUs = 20000;
+        int _currentPeriodUs;
 
         Drv8328 _drv;
         Adc::AdcCh32vThreePhaseInj& _adc;
@@ -306,8 +260,8 @@ namespace ES::Driver::MotorControl {
         uint16_t _adcValueB;
         uint16_t _adcValueC;
 
-        Timer::TimerBaseCh32v _measureTimer = {timMeas, 0xFFFF, 72};
-        Timer::TimerBaseCh32v _stepCommutationTimer = {timComm, 0xFFFF, 72};
+        Timer::TimerBaseCh32v _measureTimer = {timMeas, 0xFFFF, 144};
+        Timer::TimerBaseCh32v _stepCommutationTimer = {timComm, 0xFFFF, 144};
 
         Gpio::Ch32vPin& _testGpio;
     };
