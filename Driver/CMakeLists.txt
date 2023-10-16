@@ -31,6 +31,9 @@ target_sources(${LIBRARY_NAME}
     ${CMAKE_CURRENT_SOURCE_DIR}/Gpio/Extender/PCA9554.h
     ${CMAKE_CURRENT_SOURCE_DIR}/Gpio/IGpio.h
     ${CMAKE_CURRENT_SOURCE_DIR}/MotorControl/DRV8328.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/MotorControl/Esc.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/MotorControl/Esc.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/MotorControl/Bldc.h
     ${CMAKE_CURRENT_SOURCE_DIR}/Uart/UarteNrf52.h
     ${CMAKE_CURRENT_SOURCE_DIR}/GsmModule/SIM7600x.h
     ${CMAKE_CURRENT_SOURCE_DIR}/GsmModule/SIM7600AtCommands.h

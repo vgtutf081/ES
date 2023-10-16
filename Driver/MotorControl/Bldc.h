@@ -1,8 +1,17 @@
 #pragma once
 
 namespace ES::Driver::MotorControl::Bldc {
+    
+    enum Step : uint8_t{
+        ChAl = 1,
+        ChBl,
+        AhBl,
+        AhCl,
+        BhCl,
+        BhAl
+    };
 
-    enum Phases {
+    enum MotorPhase {
         A,
         B,
         C
@@ -13,10 +22,9 @@ namespace ES::Driver::MotorControl::Bldc {
         Falling
     };
 
-    struct MotorConfiguration {
-    public:
-        uint8_t N;
-        uint8_t P;
+    enum LiPoCells : uint8_t {
+        twoS = 2,
+        fourS = 4,
+        sixS = 6
     };
-
 }

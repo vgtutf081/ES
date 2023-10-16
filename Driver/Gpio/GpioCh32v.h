@@ -8,7 +8,7 @@
 
 namespace ES::Driver::Gpio {
 
-    struct Ch32vPin : public IGpio {
+    class Ch32vPin : public IGpio {
         public:
         constexpr Ch32vPin(GPIO_TypeDef* port, uint16_t pin) : _port(port), _pin(pin) {
             uint32_t rccPeriph  = 0;
@@ -65,6 +65,11 @@ namespace ES::Driver::Gpio {
         }
 
         void disable() override {
+            GPIO_InitTypeDef  GPIO_InitStructure={0};
+            GPIO_InitStructure.GPIO_Pin = _pin;
+            GPIO_InitStructure.GPIO_Mode = GPIO_Mode_IN_FLOATING;
+            GPIO_InitStructure.GPIO_Speed = GPIO_Speed_50MHz;
+            GPIO_Init(_port, &GPIO_InitStructure);
         }
 
         void setMode(PinMode mode, DriveMode drive, PullMode pull) {

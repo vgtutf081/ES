@@ -1,5 +1,3 @@
-#include "ES_config.h"
-
 #if defined(THREADING)
 
 #include "ThreadFreeRtos.h"

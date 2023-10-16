@@ -5,7 +5,7 @@
 
 namespace ES::Driver::Gpio {
     
-    struct IGpio {
+    class IGpio {
         
     public:
         virtual void set() = 0;
