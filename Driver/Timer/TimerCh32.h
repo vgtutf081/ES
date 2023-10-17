@@ -69,7 +69,8 @@ namespace ES::Driver::Timer {
             }
 
             TIM_TimeBaseInit(_tim, &TIMER_InitStructure);
-            //TIM_SetCounter(_tim, 0);
+            stop();
+            TIM_SetCounter(_tim, 0);
         } 
 
         TimerBaseCh32v() {
@@ -77,6 +78,7 @@ namespace ES::Driver::Timer {
         }
 
         void setIrq(uint8_t priority, uint16_t event = TIM_IT_Update) {
+            TIM_ClearITPendingBit(_tim, event);
             _irqEvent = event;
             if(event == TIM_IT_Update) {
                 NVIC_InitTypeDef NVIC_InitStructure;

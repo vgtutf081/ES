@@ -2,6 +2,7 @@
 
 #include "ThreadFreeRtos.h"
 
+
 namespace ES::Threading {
 
     static ID makeThreadId(TaskHandle_t handle) {
@@ -25,8 +26,11 @@ namespace ES::Threading {
     void setPriority(ThreadPriority priority) {
         vTaskPrioritySet(xTaskGetCurrentTaskHandle(), makeOsPriority(priority));
     }
-    void sleepForMs(size_t milliseconds){
-        vTaskDelay(milliseconds);
+    void sleepForMs(size_t value){
+        vTaskDelay(value * 1000);
+    }
+    void sleepForUs(size_t value){
+        vTaskDelay(value);
     }
     void yield(){
         taskYIELD();
