@@ -25,6 +25,7 @@ extern "C" {
         if (TIM_GetITStatus(TIM2, TIM_IT_Update) != RESET)
         {   
             TIM_ClearITPendingBit(TIM2, TIM_IT_Update);
+            ptr->intTim2Callback();
         }
     }
 
