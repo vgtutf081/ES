@@ -27,11 +27,17 @@ namespace ES::Threading {
         vTaskPrioritySet(xTaskGetCurrentTaskHandle(), makeOsPriority(priority));
     }
     void sleepForMs(size_t value){
+#if defined(NRF)
+        vTaskDelay(value);
+#elif defined(CH32V)
         vTaskDelay(value * 1000);
+#endif
     }
+#if defined(CH32V)
     void sleepForUs(size_t value){
         vTaskDelay(value);
     }
+#endif
     void yield(){
         taskYIELD();
     }

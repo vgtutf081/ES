@@ -7,7 +7,13 @@
 #include "FreeRTOS.h"
 #include "task.h"
 
+#if defined(NRF)
+static_assert(configTICK_RATE_HZ == 1000, "Tick rate for sleepForMs should be 1000");
+#endif
+
+#if defined(CH32V)
 static_assert(configTICK_RATE_HZ == 1000000, "Tick rate for sleepForMs should be 1000000");
+#endif
 
 namespace ES::Threading {
 
@@ -28,7 +34,9 @@ namespace ES::Threading {
     ThreadPriority getPriority();
     void setPriority(ThreadPriority priority);
     void sleepForMs(size_t value);
+    #if defined(CH32V)
     void sleepForUs(size_t value);
+    #endif
     void yield();
     
     class Thread {
