@@ -7,6 +7,8 @@
 #include "FreeRTOS.h"
 #include "task.h"
 
+static_assert(configTICK_RATE_HZ == 1000000, "Tick rate for sleepForMs should be 1000000");
+
 namespace ES::Threading {
 
     enum class ThreadPriority : uint32_t {
@@ -25,7 +27,8 @@ namespace ES::Threading {
     ID getId();
     ThreadPriority getPriority();
     void setPriority(ThreadPriority priority);
-    void sleepForMs(size_t milliseconds);
+    void sleepForMs(size_t value);
+    void sleepForUs(size_t value);
     void yield();
     
     class Thread {

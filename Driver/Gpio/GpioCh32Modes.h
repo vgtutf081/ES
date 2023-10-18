@@ -24,7 +24,7 @@ namespace ES::Driver::Gpio {
     
     enum class InterruptMode : uint32_t {
         None,
-        Rising ,
+        Rising,
         Falling,
         Both
     };
