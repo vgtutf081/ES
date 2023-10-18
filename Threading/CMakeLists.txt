@@ -16,3 +16,6 @@ target_sources(${PROJECT_NAME}
     ThreadFreeRtos/ThreadFreeRtos.cpp
 )
 
+target_compile_definitions(Threading INTERFACE
+    THREADING
+)
