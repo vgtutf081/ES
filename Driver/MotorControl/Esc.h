@@ -18,6 +18,8 @@ namespace ES::Driver::MotorControl {
 
     static constexpr uint8_t CommutationFullCircle = 42;
 
+    static  constexpr uint8_t ProcessingDelay = 10;
+
     static TIM_TypeDef* timMeas = TIM2;
     static TIM_TypeDef* timComm = TIM3;
     static constexpr uint32_t TimerFreqMhz = 144;
@@ -26,15 +28,18 @@ namespace ES::Driver::MotorControl {
     static constexpr float HalfSupplyVal = ((SupplyVoltage / 2) * LowResistor) / (HighResistor + LowResistor);
     static constexpr uint16_t HalfSupplyAdcVal = static_cast<uint16_t>((4095.0f / 3300.0f) * HalfSupplyVal);
 
+    static constexpr float k = static_cast<float>(HighResistor + LowResistor) / LowResistor;
+
     static constexpr uint32_t OpenLoopEndPeriod = 2000;
     static constexpr uint32_t OpenLoopStartPeriod = 50000;
     static constexpr float OpenLoopAcceleration = 1.5f;
 
     class Esc6Step {
     public:
-        Esc6Step(Drv8328 drv, Adc::AdcCh32vThreePhaseInj& adc, Gpio::Ch32vPin& testGpio) :
+        Esc6Step(Drv8328 drv, Adc::AdcCh32vThreePhaseInj& adc, uint32_t bemfThreshold, Gpio::Ch32vPin& testGpio) :
         _drv(drv), _adc(adc), _testGpio(testGpio) {
             getInstance();
+            updateBemfThreshold(bemfThreshold);
             _drv.init();
             Threading::sleepForMs(1000);
             _drv.startPwm();
@@ -128,12 +133,6 @@ namespace ES::Driver::MotorControl {
             switchPhase(_previousStep);
         }
 
-        Bldc::Step _currentStep;
-        Bldc::Step _previousStep = static_cast<Bldc::Step>(6);
-        Bldc::Step _nextStep = static_cast<Bldc::Step>(1);
-        Bldc::MotorPhase _bemfPhase;
-        Bldc::BemfEdge _bemfEdge;
-        
         void intTim3Callback() {
             _drv._timComplimentary.triggerDisable();
             nextStep();
@@ -145,76 +144,72 @@ namespace ES::Driver::MotorControl {
 
         void intTim1Callback() {
             _drv._timComplimentary.triggerEn();
+            _counter = _measureTimer.getCounter();
         }
 
         void intTim2Callback() {
             _measureTimer.stop();
+            _measureTimer.setCounter(0);
             _stepCommutationTimer.stop();
+            _stepCommutationTimer.setCounter(0);
             _adc.disable();
             _openLoopStart.give();
         }
 
+        void updateBemfThreshold(uint32_t adcValue) {
+            _halfSupplyAdcValue = adcValue / 2;
+        }
+
     private:
 
-        Threading::Thread _motorMeasurementsHandle{"MotorMeasure", 512, Threading::ThreadPriority::Normal,  [this](){
-            //_openLoopStart.take();
-            //_openLoopEnd.take();
-            /*Threading::sleepForMs(5000);
-            nextStep();
-            Threading::sleepForMs(50);
+        Threading::Thread _motorTorqueHandle{"MotorTorqueControl", 256, Threading::ThreadPriority::Normal,  [this](){
+            uint16_t counter = 0;
 
-            
-            _currentPeriodUs = _openLoopStartPeriodUs;
-            while(_currentPeriodUs > _openLoopEndPeriodUs) {
-                Threading::sleepForUs(_currentPeriodUs);
-                _currentPeriodUs /= 1.8f;
-                nextStep();
-            }
+            bool bemfFlag = false;
 
-            _stepCommutationTimer.setIrq(0);
-            _stepCommutationTimer.setPeriod(_openLoopEndPeriodUs * 4);
-            _currentSpeed = _openLoopEndPeriodUs;
-            _stepCommutationTimer.start();
-            _adc.enable();
-            _drv._timComplimentary.setIrq(0);*/
+            uint16_t adcValueA;
+            uint16_t adcValueB;
+            uint16_t adcValueC;
 
-            //_openLoopEnd.give();
-                       
+            uint8_t index = 0;
+            size_t currentSize = 0;
+            uint32_t sum = 0;
+
             while(true) {
                 while(!ADC_GetFlagStatus(ADC1, ADC_FLAG_JEOC)) {
                     Threading::yield();
                 }
                 ADC_ClearFlag(ADC1, ADC_FLAG_JEOC);
 
-                _adcValueA = ADC1->IDATAR1;
-                _adcValueB = ADC1->IDATAR2;
-                _adcValueC = ADC1->IDATAR3;
+                adcValueA = ADC1->IDATAR1;
+                adcValueB = ADC1->IDATAR2;
+                adcValueC = ADC1->IDATAR3;
 
                 if(_bemfPhase == Bldc::MotorPhase::A) { 
-                    _adcValue = _adcValueA;
+                    _adcValue = adcValueA;
                 }
                 if(_bemfPhase == Bldc::MotorPhase::B) { 
-                    _adcValue = _adcValueB;
+                    _adcValue = adcValueB;
                 }
                 if(_bemfPhase == Bldc::MotorPhase::C) { 
-                    _adcValue = _adcValueC;
+                    _adcValue = adcValueC;
                 }
-                bool bemfFlag = true;
                 if(_adcFlag) {
                     if(_bemfEdge == Bldc::BemfEdge::Falling) {
-                        bemfFlag = _adcValue < HalfSupplyAdcVal;
+                        bemfFlag = _adcValue < _halfSupplyAdcValue;
                     }
                     else if(_bemfEdge == Bldc::BemfEdge::Rising) {
-                        bemfFlag = _adcValue > HalfSupplyAdcVal;
+                        bemfFlag = _adcValue > _halfSupplyAdcValue;
                     }
                     if(bemfFlag) {
                         _adcFlag = false;
 
                         _measureTimer.stop();
-                        int32_t counter = _measureTimer.getCounter();
+                        //counter = _measureTimer.getCounter() - ProcessingDelay;
+                        counter = _counter;
                         _measureTimer.setCounter(0);
 
-                        _sum = 0;
+                        sum = 0;
                         buf[index] = static_cast<uint16_t>(counter);
                         index++;
                         if(index == windowSize) {
@@ -224,29 +219,29 @@ namespace ES::Driver::MotorControl {
                             currentSize++;
                         }
                         for(uint8_t i = 0; i < currentSize; i++)  {
-                            _sum += buf[i];
+                            sum += buf[i];
                         }
-                        _sum /= currentSize;
+                        sum /= currentSize;
 
-                        _stepCommutationTimer.setPeriod(_sum);
+                        _stepCommutationTimer.setPeriod(sum);
                         _stepCommutationTimer.start();
                     }
                 }
-
             }
         }};
 
-        Threading::Thread _motorStart{"MotorControl", 512, Threading::ThreadPriority::Normal,  [this](){
+        Threading::Thread _motorStartHandle{"MotorStartControl", 256, Threading::ThreadPriority::Normal,  [this](){
+            uint32_t currentPeriod = 0;
             while(true) {
                 _openLoopStart.take();
                 Threading::sleepForMs(1000);
                 nextStep();
                 Threading::sleepForMs(20);
 
-                _currentPeriod = OpenLoopStartPeriod;
-                while(_currentPeriod > OpenLoopEndPeriod) {
-                    Threading::sleepForUs(_currentPeriod);
-                    _currentPeriod /= OpenLoopAcceleration;
+                currentPeriod = OpenLoopStartPeriod;
+                while(currentPeriod > OpenLoopEndPeriod) {
+                    Threading::sleepForUs(currentPeriod);
+                    currentPeriod /= OpenLoopAcceleration;
                     nextStep();
                 }
 
@@ -256,37 +251,35 @@ namespace ES::Driver::MotorControl {
                 _adc.enable();
                 _drv._timComplimentary.setIrq(0);
                 _measureTimer.setIrq(0);
-                //_openLoopEnd.give();
-                //Threading::sleepForMs(20);
             }
-
         }};
 
         void openLoopStart() {
             _openLoopStart.give();
         }
 
+        Bldc::Step _currentStep;
+        Bldc::Step _previousStep = static_cast<Bldc::Step>(6);
+        Bldc::Step _nextStep = static_cast<Bldc::Step>(1);
+        Bldc::MotorPhase _bemfPhase;
+        Bldc::BemfEdge _bemfEdge;
+
         Threading::BinarySemaphore _tim3Event;
         Threading::BinarySemaphore _openLoopStart;
+
+        uint32_t _halfSupplyAdcValue = 0;
 
         void getInstance();
         bool _adcFlag = false;
 
+        uint16_t _counter = 0;
+
         static const size_t windowSize = CommutationFullCircle;
         uint16_t buf[windowSize];
-        uint8_t index = 0;
-        size_t currentSize = 0;
-
-        uint32_t _sum = 0;
-        uint32_t _currentPeriod = 0;
 
         Drv8328 _drv;
         Adc::AdcCh32vThreePhaseInj& _adc;
         uint16_t _adcValue;
-
-        uint16_t _adcValueA;
-        uint16_t _adcValueB;
-        uint16_t _adcValueC;
 
         Timer::TimerBaseCh32v _measureTimer = {timMeas, 0xFFFF, TimerFreqMhz / TimerDiv};
         Timer::TimerBaseCh32v _stepCommutationTimer = {timComm, 0xFFFF, TimerFreqMhz / TimerDiv};
