@@ -12,7 +12,7 @@ static_assert(configTICK_RATE_HZ == 1000, "Tick rate for sleepForMs should be 10
 #endif
 
 #if defined(CH32V)
-static_assert(configTICK_RATE_HZ == 1000000, "Tick rate for sleepForMs should be 1000000");
+static_assert(configTICK_RATE_HZ == 100000, "Tick rate for sleepForMs should be 1000000");
 #endif
 
 namespace ES::Threading {

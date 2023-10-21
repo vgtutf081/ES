@@ -14,6 +14,7 @@ target_sources(${PROJECT_NAME}
     ThreadFreeRtos/Semaphore.h
     ThreadFreeRtos/FreeRtosQueue.h
     ThreadFreeRtos/ThreadFreeRtos.cpp
+    ThreadFreeRtos/TimerRtos.h
 )
 
 target_compile_definitions(Threading INTERFACE

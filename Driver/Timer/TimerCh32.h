@@ -217,6 +217,10 @@ namespace ES::Driver::Timer {
             return _div;
         }
 
+        uint16_t getPeriod() {
+            return _tim->ATRLR;
+        }
+
     private:
 
         u32 _timBaseFreq;
@@ -352,6 +356,22 @@ namespace ES::Driver::Timer {
             }
             else if(_channel == 4) {
                 _tim->CH4CVR = static_cast<uint16_t>(duty * _tim->ATRLR);
+            }
+            return true;
+        }
+
+        bool setCompare(uint16_t value) {
+            if(_channel == 1) {
+                _tim->CH1CVR = value;
+            }
+            else if(_channel == 2) {
+                _tim->CH2CVR = value;
+            }
+            else if(_channel == 3) {
+                _tim->CH3CVR = value;
+            }
+            else if(_channel == 4) {
+                _tim->CH4CVR = value;
             }
             return true;
         }

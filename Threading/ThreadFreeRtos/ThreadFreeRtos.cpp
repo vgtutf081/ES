@@ -30,12 +30,12 @@ namespace ES::Threading {
 #if defined(NRF)
         vTaskDelay(value);
 #elif defined(CH32V)
-        vTaskDelay(value * 1000);
+        vTaskDelay(value * 100);
 #endif
     }
 #if defined(CH32V)
     void sleepForUs(size_t value){
-        vTaskDelay(value);
+        vTaskDelay(value / 10);
     }
 #endif
     void yield(){

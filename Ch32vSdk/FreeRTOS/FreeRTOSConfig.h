@@ -94,7 +94,7 @@
 #define configUSE_IDLE_HOOK				0
 #define configUSE_TICK_HOOK				0
 #define configCPU_CLOCK_HZ				SystemCoreClock
-#define configTICK_RATE_HZ				( ( TickType_t ) 1000000 )
+#define configTICK_RATE_HZ				( ( TickType_t ) 100000 )
 #define configMAX_PRIORITIES			( 7 )
 #define configMINIMAL_STACK_SIZE		( ( unsigned short ) 128 ) /* Can be as low as 60 but some of the demo tasks that use this constant require it to be higher. */
 #define configTOTAL_HEAP_SIZE			( ( size_t ) ( 16 * 1024 ) )
@@ -117,7 +117,7 @@
 #define configMAX_CO_ROUTINE_PRIORITIES ( 2 )
 
 /* Software timer definitions. */
-#define configUSE_TIMERS				0
+#define configUSE_TIMERS				1
 #define configTIMER_TASK_PRIORITY		( 2 )
 #define configTIMER_QUEUE_LENGTH		32
 #define configTIMER_TASK_STACK_DEPTH	( 80 )
