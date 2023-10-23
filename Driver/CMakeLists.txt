@@ -14,6 +14,7 @@ target_include_directories(${LIBRARY_NAME}
         "${CMAKE_CURRENT_SOURCE_DIR}/MotorControl" 
         "${CMAKE_CURRENT_SOURCE_DIR}/Adc" 
         "${CMAKE_CURRENT_SOURCE_DIR}/I2C" 
+        "${CMAKE_CURRENT_SOURCE_DIR}/Telemetry" 
 )
 
 #source
@@ -30,6 +31,8 @@ target_sources(${LIBRARY_NAME}
     ${CMAKE_CURRENT_SOURCE_DIR}/Gpio/Extender/ExtenderPin.h
     ${CMAKE_CURRENT_SOURCE_DIR}/Gpio/Extender/PCA9554.h
     ${CMAKE_CURRENT_SOURCE_DIR}/Gpio/IGpio.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/Gpio/GpioCh32v.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/Gpio/ExtiCh32v.h
     ${CMAKE_CURRENT_SOURCE_DIR}/MotorControl/DRV8328.h
     ${CMAKE_CURRENT_SOURCE_DIR}/MotorControl/Esc.h
     ${CMAKE_CURRENT_SOURCE_DIR}/MotorControl/Esc.cpp
@@ -46,4 +49,5 @@ target_sources(${LIBRARY_NAME}
     ${CMAKE_CURRENT_SOURCE_DIR}/Adc/IAdc.h
     ${CMAKE_CURRENT_SOURCE_DIR}/I2C/II2C.h
     ${CMAKE_CURRENT_SOURCE_DIR}/I2C/I2CNrf52.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/Telemetry/Dshot.h
 )

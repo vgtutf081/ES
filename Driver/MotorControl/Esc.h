@@ -6,10 +6,13 @@
 #include "ThreadFreeRtos.h"
 #include "Semaphore.h"
 #include "TimerRtos.h"
+#include "CriticalSection.h"
 
 #include "GpioCh32v.h"
 
 #include <cmath>
+
+#define BR2205
 
 namespace ES::Driver::MotorControl {
 
@@ -28,11 +31,21 @@ namespace ES::Driver::MotorControl {
     static constexpr uint32_t Factor = 8;
     static constexpr uint32_t TimerDiv = TimerFreqMhz / Factor;
 
-    static constexpr uint16_t Torque = static_cast<uint16_t>(Bldc::Torque::Low);
+    static constexpr uint16_t Torque = static_cast<uint16_t>(Bldc::Torque::VeryLow);
 
-    static constexpr float MinThrottle = 0.18f;
-    static constexpr float MaxThrottle = 0.4f;
+#if defined(BR2205)
+    static constexpr float MinThrottle = 0.22f;
+    static constexpr float MaxThrottle = 0.5f;
     static constexpr float OpenLoopThrottle = 0.3f;
+#elif defined(BROTHER_HOBBY)
+    static constexpr float MinThrottle = 0.3f;
+    static constexpr float MaxThrottle = 0.7f;
+    static constexpr float OpenLoopThrottle = 0.5f;
+#else
+#error
+#endif
+
+
 
     static constexpr uint32_t AdcStop = 200;
     static constexpr uint32_t AdcStart = 700;
@@ -45,10 +58,17 @@ namespace ES::Driver::MotorControl {
     static constexpr uint16_t HalfSupplyAdcVal = static_cast<uint16_t>((4095.0f / 3300.0f) * HalfSupplyVal);
 
     static constexpr float k = static_cast<float>(HighResistor + LowResistor) / LowResistor;
-
+#if defined(BR2205)
     static constexpr uint32_t OpenLoopEndPeriod = 1000;
     static constexpr uint32_t OpenLoopStartPeriod = 30000;
     static constexpr float OpenLoopAcceleration = 1.1f;
+#elif defined(BROTHER_HOBBY)
+    static constexpr uint32_t OpenLoopEndPeriod = 1000;
+    static constexpr uint32_t OpenLoopStartPeriod = 20000;
+    static constexpr float OpenLoopAcceleration = 1.1f;
+#else
+#error
+#endif
 
     class Esc6Step {
     public:
@@ -96,9 +116,8 @@ namespace ES::Driver::MotorControl {
         }
 
         void switchPhase(Bldc::Step step) {
-            _currentStep = step;
             _drv._timComplimentary.stop();
-            _drv._timComplimentary.setCounter(0);
+            _drv._timComplimentary.setCounter(Torque - (Torque / 5));
             if(step == Bldc::Step::ChAl) {
                 _drv.deCommutate(Bldc::MotorPhase::B);
                 _drv.commutateHigh(Bldc::MotorPhase::C);
@@ -178,6 +197,8 @@ namespace ES::Driver::MotorControl {
         void intTim3Callback() {
             _drv._timComplimentary.triggerDisable();
             nextStep();
+            _measureTimer.stop();
+            _measureTimer.setCounter(0);
             _measureTimer.start();
             _adcFlag = true;
             _stepCommutationTimer.stop();
@@ -191,6 +212,7 @@ namespace ES::Driver::MotorControl {
         }
 
         void intTim2Callback() {
+            _testGpio.toggle();
             motorStop();
             motorStart();
         }
@@ -223,10 +245,6 @@ namespace ES::Driver::MotorControl {
             return _rpm;
         }
 
-        void setSpeedRpm(uint32_t speed) {
-            _targetSpeedRpm = speed;
-        }
-
         MotorState getState() {
             return _state;
         }
@@ -234,26 +252,17 @@ namespace ES::Driver::MotorControl {
     private:
 
         Threading::Thread _speedControlHandle{"speedControl", 256, Threading::ThreadPriority::Normal,  [this](){
-            uint32_t circleTimeUs = 0;
-            uint32_t circleTargetTimeUs = 0;
+            int32_t prevCircleTime = 0;
+            int32_t circleTimeUs = 0;
+            uint32_t stableSpeedCount = 10;
+            _stableSpeed = true;
             while(true) {
+                prevCircleTime = circleTimeUs;
                 circleTimeUs = _stopWatch.getTimeUs();
-                if(circleTimeUs != 0) {
-                    circleTargetTimeUs = MinuteUs / _targetSpeedRpm;
-                    _rpm = MinuteUs / circleTimeUs;
+                if(abs(prevCircleTime - circleTimeUs) > 100) {
                 }
-                /*if(_targetSpeedRpm != 0) {
-                    int32_t diff = static_cast<int32_t>(circleTargetTimeUs) - circleTimeUs;
-                    if(abs(diff) > 50) {
-                        if(diff > 0) {
-                            _drv.changeDuty(false);
-                        }
-                        else {
-                            _drv.changeDuty(true);
-                        }
-                    }
-                }*/
-                Threading::sleepForMs(10);
+                _rpm = MinuteUs / circleTimeUs;
+                Threading::sleepForMs(50);
             }
         }};
 
@@ -271,6 +280,8 @@ namespace ES::Driver::MotorControl {
                     Threading::yield();
                 }
                 ADC_ClearFlag(ADC1, ADC_FLAG_JEOC);
+
+                Threading::CriticalSection _lock{};
 
                 //adcValueA = ADC1->IDATAR1;
                 //adcValueB = ADC1->IDATAR2;
@@ -294,9 +305,12 @@ namespace ES::Driver::MotorControl {
                     }
                     if(bemfFlag) {
                         _measureTimer.stop();
+                        _measureTimer.setCounter(0);
+                        _measureTimer.start();
+
                         _adcFlag = false;
                         //counter = _measureTimer.getCounter() - ProcessingDelay;
-                        _measureTimer.setCounter(0);
+
                         counter = _counter;
                         /*sum = 0;
                         buf[index] = static_cast<uint16_t>(counter);
@@ -313,7 +327,7 @@ namespace ES::Driver::MotorControl {
                         sum /= currentSize;
                         _currentSwitchPeriod = sum * 2;
                         _stepCommutationTimer.setPeriod(sum);*/
-                        _stepCommutationTimer.setPeriod(_counter);
+                        _stepCommutationTimer.setPeriod(counter);
                         _stepCommutationTimer.start();
 
                         if(!_stopWatch.isStarted()) {
@@ -367,6 +381,8 @@ namespace ES::Driver::MotorControl {
         MotorState _state = MotorState::Idle;
         float _throttle = 0.f;
 
+        bool _stableSpeed = false;
+
         Bldc::Step _currentStep;
         Bldc::Step _previousStep = static_cast<Bldc::Step>(6);
         Bldc::Step _nextStep = static_cast<Bldc::Step>(1);
@@ -377,7 +393,6 @@ namespace ES::Driver::MotorControl {
 
         bool _forwardDirection = false;
 
-        uint32_t _targetSpeedRpm = 0;
         uint32_t _rpm = 0;
         uint32_t _currentSwitchPeriod = 0;
         uint32_t _stepFullCircleCount = 0;

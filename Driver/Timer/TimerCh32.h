@@ -265,24 +265,24 @@ namespace ES::Driver::Timer {
             GPIO_InitStructure.GPIO_Speed = GPIO_Speed_50MHz;
             GPIO_Init(port, &GPIO_InitStructure);
 
-            TIM_OCInitStructure.TIM_OCMode = TIM_OCMode_PWM2;
+            TIM_OCInitStructure.TIM_OCMode = TIM_OCMode_PWM1;
             TIM_OCInitStructure.TIM_OutputState = TIM_OutputState_Enable;
             TIM_OCInitStructure.TIM_Pulse = 0;
             TIM_OCInitStructure.TIM_OCPolarity = TIM_OCPolarity_High;
             TIM_OCInitStructure.TIM_OCIdleState = TIM_OCIdleState_Reset;
-            if(pwmPin == GPIO_Pin_8) {
+            if(_channel == 1) {
                 TIM_OC1Init(_tim, &TIM_OCInitStructure);
                 TIM_OC1PreloadConfig(_tim, TIM_OCPreload_Disable);
             }
-            if(pwmPin == GPIO_Pin_9) {
+            if(_channel == 2) {
                 TIM_OC2Init(_tim, &TIM_OCInitStructure);
                 TIM_OC2PreloadConfig(_tim, TIM_OCPreload_Disable);
             }
-            if(pwmPin == GPIO_Pin_10) {
+            if(_channel == 3) {
                 TIM_OC3Init(_tim, &TIM_OCInitStructure);
                 TIM_OC3PreloadConfig(_tim, TIM_OCPreload_Disable);
             }
-            if(pwmPin == GPIO_Pin_11) {
+            if(_channel == 4) {
                 TIM_OC4Init(_tim, &TIM_OCInitStructure);
                 TIM_OC4PreloadConfig(_tim, TIM_OCPreload_Disable);
             }
@@ -330,15 +330,15 @@ namespace ES::Driver::Timer {
             TIM_OCInitStructure.TIM_OCNPolarity = TIM_OCPolarity_High;
             TIM_OCInitStructure.TIM_OCNIdleState = TIM_OCNIdleState_Reset;
 
-            if(_pwmPinN == GPIO_Pin_13) {
+            if(_channel == 1) {
                 TIM_OC1Init(_tim, &TIM_OCInitStructure);
                 TIM_OC1PreloadConfig(_tim, TIM_OCPreload_Disable);
             }
-            else if(_pwmPinN == GPIO_Pin_14) {
+            else if(_channel == 2) {
                 TIM_OC2Init(_tim, &TIM_OCInitStructure);
                 TIM_OC2PreloadConfig(_tim, TIM_OCPreload_Disable);
             }
-            else if(_pwmPinN == GPIO_Pin_15) {
+            else if(_channel == 3) {
                 TIM_OC3Init(_tim, &TIM_OCInitStructure);
                 TIM_OC3PreloadConfig(_tim, TIM_OCPreload_Disable);
             }

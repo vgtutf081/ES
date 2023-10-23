@@ -10,7 +10,7 @@ namespace ES::Driver::Gpio {
 
     class Ch32vPin : public IGpio {
         public:
-        constexpr Ch32vPin(GPIO_TypeDef* port, uint16_t pin) : _port(port), _pin(pin) {
+        Ch32vPin(GPIO_TypeDef* port, uint16_t pin) : _port(port), _pin(pin) {
             uint32_t rccPeriph  = 0;
 
             if(port == GPIOA){
@@ -30,7 +30,6 @@ namespace ES::Driver::Gpio {
             }
 
             RCC_APB2PeriphClockCmd(rccPeriph,ENABLE);
-
         }
 
         constexpr uint16_t getPin() const  {
@@ -111,13 +110,9 @@ namespace ES::Driver::Gpio {
             GPIO_InitStructure.GPIO_Speed = GPIO_Speed_50MHz;
             GPIO_Init(_port, &GPIO_InitStructure);
         }
-
         private:
         bool _pinSet = false;
         GPIO_TypeDef* _port;
         uint16_t _pin;
     };
 }
-
-
-

@@ -134,6 +134,7 @@ SW_Handler:
 	store_x x19, 16 * portWORD_SIZE( sp )
 	store_x x20, 17 * portWORD_SIZE( sp )
 	store_x x21, 18 * portWORD_SIZE( sp )
+
 	store_x x22, 19 * portWORD_SIZE( sp )
 	store_x x23, 20 * portWORD_SIZE( sp )
 	store_x x24, 21 * portWORD_SIZE( sp )

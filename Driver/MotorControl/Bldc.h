@@ -31,10 +31,12 @@ namespace ES::Driver::MotorControl::Bldc {
     static constexpr uint16_t freq16Khz = 144000000 / 16000;
     static constexpr uint16_t freq32Khz = 144000000 / 32000;
     static constexpr uint16_t freq48Khz = 144000000 / 48000;
+    static constexpr uint16_t freq64Khz = 144000000 / 64000;
 
     enum class Torque : uint16_t {
         High = freq16Khz, 
         Medium = freq32Khz, 
         Low = freq48Khz, 
+        VeryLow = freq64Khz
     };
 }

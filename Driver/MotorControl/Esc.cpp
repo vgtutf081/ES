@@ -4,10 +4,10 @@
 
     using namespace  ES::Driver::MotorControl;
 
-    Esc6Step* ptr;
+    Esc6Step* escPtr;
 
     void Esc6Step::getInstance() {
-        ptr = this;
+        escPtr = this;
     }
 
 extern "C" {
@@ -16,7 +16,7 @@ extern "C" {
         if (TIM_GetITStatus(TIM1, TIM_IT_Update) != RESET)
         {   
             TIM_ClearITPendingBit(TIM1, TIM_IT_Update);
-            ptr->intTim1Callback();
+            escPtr->intTim1Callback();
         }
     }
 
@@ -25,7 +25,7 @@ extern "C" {
         if (TIM_GetITStatus(TIM2, TIM_IT_Update) != RESET)
         {   
             TIM_ClearITPendingBit(TIM2, TIM_IT_Update);
-            ptr->intTim2Callback();
+            escPtr->intTim2Callback();
         }
     }
 
@@ -34,7 +34,7 @@ extern "C" {
         if (TIM_GetITStatus(TIM3, TIM_IT_Update) != RESET)
         {   
             TIM_ClearITPendingBit(TIM3, TIM_IT_Update);
-            ptr->intTim3Callback();
+            escPtr->intTim3Callback();
         }
     }
 }
