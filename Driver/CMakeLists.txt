@@ -50,4 +50,5 @@ target_sources(${LIBRARY_NAME}
     ${CMAKE_CURRENT_SOURCE_DIR}/I2C/II2C.h
     ${CMAKE_CURRENT_SOURCE_DIR}/I2C/I2CNrf52.h
     ${CMAKE_CURRENT_SOURCE_DIR}/Telemetry/Dshot.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/Telemetry/Dshot.cpp
 )

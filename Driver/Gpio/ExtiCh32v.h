@@ -25,13 +25,16 @@ namespace ES::Driver::Gpio {
 
     static ExtiVector _extiVectorTable[16];
 
+    void extiClearInterrupt(Ch32vPin* pin) {
+        EXTI_ClearITPendingBit(getExtiLine(pin));
+    }
+
     void handleExti(int first, int last){
         for(int i = first; i <= last; ++i){
             const auto& vector = _extiVectorTable[i];
             auto pin = vector.pin->getPin();
-
-            if(EXTI_GetITStatus(pin) != RESET){
-                EXTI_ClearITPendingBit(pin);
+            if(EXTI_GetITStatus(getExtiLine(vector.pin)) != RESET) {
+                extiClearInterrupt(vector.pin);
 
                 bool hasUserCallback = vector.callback != nullptr;
 
@@ -42,11 +45,8 @@ namespace ES::Driver::Gpio {
                     return;
                 }
             }
-        }
-    }
 
-    void extiClearInterrupt(Ch32vPin* pin) {
-        EXTI_ClearITPendingBit(getExtiLine(pin));
+        }
     }
 
     uint8_t getPortSource(Ch32vPin* pin) {

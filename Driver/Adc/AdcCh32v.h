@@ -199,6 +199,13 @@ namespace ES::Driver::Adc {
             return _thirdRankCh;
         }
 
+        template<int TopResistor = 10000, int BottomResistor = 10000>
+        float getVoltageMv(u16 rawValue) {
+            constexpr float k = static_cast<float>(TopResistor + BottomResistor) / BottomResistor;
+            float value = (static_cast<float>(rawValue) / _bitDepth) * _vdd * k;
+            return value;
+        }
+
 
     private:
 
@@ -299,8 +306,7 @@ namespace ES::Driver::Adc {
         }
 
         template<int TopResistor = 10000, int BottomResistor = 10000>
-        float getVoltageMv() {
-            u16 rawValue = getRawValue();
+        float getVoltageMv(u16 rawValue) {
             constexpr float k = static_cast<float>(TopResistor + BottomResistor) / BottomResistor;
             float value = (static_cast<float>(rawValue) / _bitDepth) * _vdd * k;
             return value;
