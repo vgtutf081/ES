@@ -26,9 +26,9 @@ namespace ES::Driver::Telemetry::Dhsot {
 
     struct DshotPacket {
     public:
-        uint16_t throttle;
-        uint16_t crc;
-        bool requestTelemetry;
+        uint16_t throttle = 0;
+        uint16_t crc = 0;
+        bool requestTelemetry = false;
     };
 
     class DshotListner {
@@ -110,7 +110,7 @@ namespace ES::Driver::Telemetry::Dhsot {
 
     private:
 
-        Threading::Thread _DhshotHandle{"Dhsot", 256, Threading::ThreadPriority::Normal,  [this](){
+        Threading::Thread _DhshotHandle{"Dhsot", 64, Threading::ThreadPriority::Normal,  [this](){
             while(true) {
                 if(flag) {
                     parseBuffer();

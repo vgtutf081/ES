@@ -35,7 +35,7 @@ namespace ES::Driver::MotorControl {
 
 #if defined(BR2205)
     static constexpr float MinThrottle = 0.2f;
-    static constexpr float MaxThrottle = 0.6f;
+    static constexpr float MaxThrottle = 0.7f;
     static constexpr float OpenThrottle = 0.4f;
 
 #elif defined(BROTHER_HOBBY)
@@ -60,9 +60,9 @@ namespace ES::Driver::MotorControl {
 
     //static constexpr float k = static_cast<float>(HighResistor + LowResistor) / LowResistor;
 #if defined(BR2205)
-    static constexpr uint32_t OpenLoopEndPeriod = 100;
+    static constexpr uint32_t OpenLoopEndPeriod = 80;
     static constexpr uint32_t OpenLoopStartPeriod = 1000;
-    static constexpr float OpenLoopAcceleration = 1.6f;
+    static constexpr float OpenLoopAcceleration = 1.7f;
 #elif defined(BROTHER_HOBBY)
     static constexpr uint32_t OpenLoopEndPeriod = 1000;
     static constexpr uint32_t OpenLoopStartPeriod = 20000;
@@ -119,14 +119,9 @@ namespace ES::Driver::MotorControl {
         }
 
         void setThrottleByDshot(uint16_t value) {
-            if(value < 100) {
-                if(value == 0) {
-                    _targetThrottle = 0;
-                    return;
-                }
-                else {
-                    return;
-                }
+            if(value == 0) {
+                _targetThrottle = 0;
+                return;
             }
             float tmp = static_cast<float>(value) * (static_cast<float>(Period) / DshotThrottleMaxValue);
             _targetThrottle = static_cast<uint16_t>(tmp) + MinimumThrottle;
@@ -281,30 +276,32 @@ namespace ES::Driver::MotorControl {
                     if(_state == MotorState::Started) {
                         diff = _targetThrottle - _currentThrottle;
                         diff = diff * 0.1f;
-                        if(diff < 10) {
-                            diff = 9;
+                        if(diff < 5) {
+                            diff = 4;
                         }
                         _currentThrottle = _currentThrottle + diff;
                         _drv.setCompare(_currentThrottle);
                     }
                 }
                 else if(_targetThrottle < _currentThrottle) {
-                    if(_state == MotorState::Started) {
+                    if(_state != MotorState::Idle) {
                         diff = _currentThrottle - _targetThrottle;
                         diff = diff * 0.1f;
-                        if(diff < 10) {
-                            diff = 9;
+                        if(diff < 5) {
+                            diff = 4;
                         }
                         _currentThrottle = _currentThrottle - diff;
                         _drv.setCompare(_currentThrottle);
+
+                        if(_targetThrottle == 0) {
+                            _currentThrottle = 0;
+                            motorStop();
+                            Threading::sleepForMs(500);
+                        }
                     }
                 }
-                if(_targetThrottle == 0) {
-                    _currentThrottle = 0;
-                    motorStop();
-                    Threading::sleepForMs(1000);
-                }
-                Threading::sleepForMs(5);
+
+                Threading::sleepForMs(10);
             }
         }};
 
@@ -391,35 +388,37 @@ namespace ES::Driver::MotorControl {
         Threading::Thread _motorStartHandle{"MotorStartControl", 256, Threading::ThreadPriority::Normal,  [this](){
             uint32_t currentPeriod = 0;
             while(true) {
-                _openLoopStart.take();
-                //Threading::sleepForMs(100);
-                nextStep();
-                Threading::sleepForMs(5);
-
-                currentPeriod = OpenLoopStartPeriod;
-                while(currentPeriod > OpenLoopEndPeriod) {
-                    Threading::sleepForUs(currentPeriod);
-                    currentPeriod /= OpenLoopAcceleration;
+                if(_openLoopStart) {
+                    //Threading::sleepForMs(100);
+                    _openLoopStart = false;
                     nextStep();
+                    Threading::sleepForMs(5);
+
+                    currentPeriod = OpenLoopStartPeriod;
+                    while(currentPeriod > OpenLoopEndPeriod) {
+                        Threading::sleepForUs(currentPeriod);
+                        currentPeriod /= OpenLoopAcceleration;
+                        nextStep();
+                    }
+                    _measureTimer.setIrq(0);
+                    _measureTimer.start();
+
+                    _stepCommutationTimer.setIrq(0);
+                    _stepCommutationTimer.setPeriod(OpenLoopEndPeriod  * TimerDiv);
+                    _stepCommutationTimer.start();
+                    _adc.enable();
+                    _drv._timComplimentary.setIrq(0);
+                    _targetThrottle = MinimumThrottle;
+                    //_drv.setCompare(MinimumThrottle);
+                    _state = MotorState::Started;
                 }
-                _measureTimer.setIrq(0);
-                _measureTimer.start();
-
-                _stepCommutationTimer.setIrq(0);
-                _stepCommutationTimer.setPeriod(OpenLoopEndPeriod  * TimerDiv);
-                _stepCommutationTimer.start();
-                _adc.enable();
-                _drv._timComplimentary.setIrq(0);
-                _targetThrottle = MinimumThrottle;
-                //_drv.setCompare(MinimumThrottle);
-                _state = MotorState::Started;
-
+                Threading::sleepForMs(100);
             }
         }};
 
         void openLoopStart() {
             _state = MotorState::OpenLoop;
-            _openLoopStart.give();
+            _openLoopStart = true;
         }
 
         MotorState _state = MotorState::Idle;
@@ -441,7 +440,7 @@ namespace ES::Driver::MotorControl {
         uint32_t _stepFullCircleCount = 0;
 
         Threading::BinarySemaphore _tim2Event;
-        Threading::BinarySemaphore _openLoopStart;
+        bool _openLoopStart;
 
         float _inputVoltage = 0; 
         uint32_t _halfSupplyAdcValue = 0;
