@@ -302,6 +302,7 @@ namespace ES::Driver::MotorControl {
                 if(_targetThrottle == 0) {
                     _currentThrottle = 0;
                     motorStop();
+                    Threading::sleepForMs(1000);
                 }
                 Threading::sleepForMs(5);
             }
