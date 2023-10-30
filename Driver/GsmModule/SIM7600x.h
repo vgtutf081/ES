@@ -1,7 +1,7 @@
 #pragma once
 
 #include "UarteNrf52.h"
-#include "IGpio.h"
+#include "GpioNrf52.h"
 #include "TimerNrf52.h"
 
 //#include "FreeRTOS.h"
@@ -30,7 +30,7 @@ namespace ES::Driver {
 
         uint8_t counterTest = 0;
 
-        Sim7600x(Uarte::UarteNrf uart, Timer::TimerNrf52 timer, Gpio::IGpio &nDisable/*, Gpio::Nrf52Gpio nReset, Gpio::Nrf52Gpio levelConvEn, Gpio::Nrf52Gpio modulePowerEn, Gpio::Nrf52Gpio ldo1V8En*/) : _uart(uart), _nDisable(nDisable), _timer(timer)/*, _nReset(nReset), _levelConvEn(levelConvEn), _modulePowerEn(modulePowerEn), _ldo1V8En(ldo1V8En) */{
+        Sim7600x(Uarte::UarteNrf uart, Timer::TimerNrf52 timer, Gpio::IGpio& nDisable/*, Gpio::Nrf52Gpio nReset, Gpio::Nrf52Gpio levelConvEn, Gpio::Nrf52Gpio modulePowerEn, Gpio::Nrf52Gpio ldo1V8En*/) : _uart(uart), _nDisable(nDisable), _timer(timer)/*, _nReset(nReset), _levelConvEn(levelConvEn), _modulePowerEn(modulePowerEn), _ldo1V8En(ldo1V8En) */{
 
         }
 
@@ -453,7 +453,7 @@ namespace ES::Driver {
         Threading::BinarySemaphore _okRecieved;
 
         Uarte::UarteNrf _uart;
-        Gpio::IGpio &_nDisable;
+        Gpio::IGpio& _nDisable;
         //Gpio::Nrf52Gpio _nReset;
         //Gpio::Nrf52Gpio _levelConvEn;
         //Gpio::Nrf52Gpio _modulePowerEn;

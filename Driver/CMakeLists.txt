@@ -33,6 +33,9 @@ target_sources(${LIBRARY_NAME}
     ${CMAKE_CURRENT_SOURCE_DIR}/Gpio/IGpio.h
     ${CMAKE_CURRENT_SOURCE_DIR}/Gpio/GpioCh32v.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/Gpio/ExtiCh32v.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/Gpio/ExtiCommon.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/Gpio/ExtiNrf52.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/Gpio/ExtiNrf52.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/MotorControl/DRV8328.h
     ${CMAKE_CURRENT_SOURCE_DIR}/MotorControl/Esc.h
     ${CMAKE_CURRENT_SOURCE_DIR}/MotorControl/Esc.cpp

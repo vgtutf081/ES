@@ -32,12 +32,13 @@ namespace ES::Driver::Gpio {
             RCC_APB2PeriphClockCmd(rccPeriph,ENABLE);
         }
 
-        constexpr uint16_t getPin() const  {
+        uint32_t getPin() const override  {
             return _pin;
         }
 
-        constexpr GPIO_TypeDef* getPort() const {
-            return _port;
+        uint32_t getPort() const override {
+            return reinterpret_cast<uint32_t>(_port);
+            
         }
 
         void set() override {
@@ -59,7 +60,11 @@ namespace ES::Driver::Gpio {
             }
         }
 
-        bool read() override {
+        uint32_t getPortAndPin() const override {
+            return 0;
+        }
+
+        bool read() const override {
             return GPIO_ReadInputDataBit(_port, _pin);
         }
 

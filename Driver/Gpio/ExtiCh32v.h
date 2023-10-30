@@ -1,34 +1,23 @@
 #pragma once
 
-#include "CriticalSection.h"
+#include "ExtiCommon.h"
+#include "GpioCh32v.h"
 
 namespace ES::Driver::Gpio {
 
-    struct InterruptCallback;
-    bool configureInterrupt(Ch32vPin* pin, PullMode pullMode, InterruptMode interruptMode, InterruptCallback* callback);
-    void releaseInterrupt(InterruptCallback* callback);
-    void releaseInterrupt(Ch32vPin* pin);
-
-    uint32_t getExtiLine(Ch32vPin* pin);
-
-    struct InterruptCallback {
-		/*virtual ~InterruptCallback(){
-			releaseInterrupt(this);
-		}*/
-		virtual void onGpioInterrupt(Ch32vPin* pin) = 0;
-	};
-
     struct ExtiVector {
-        Ch32vPin* pin;
+        IGpio& igpio;
         InterruptCallback* callback = nullptr;
     };
 
     static ExtiVector _extiVectorTable[16];
 
+    uint32_t getExtiLine(IGpio& pin);
+
     void handleExti(int first, int last){
         for(int i = first; i <= last; ++i){
             const auto& vector = _extiVectorTable[i];
-            auto pin = vector.pin->getPin();
+            auto pin = vector.pin.getPin();
 
             if(EXTI_GetITStatus(pin) != RESET){
                 EXTI_ClearITPendingBit(pin);
@@ -36,7 +25,7 @@ namespace ES::Driver::Gpio {
                 bool hasUserCallback = vector.callback != nullptr;
 
                 if(hasUserCallback){
-                    vector.callback->onGpioInterrupt(vector.pin);
+                    vector.callback->onGpioInterrupt(igpio.getPin());
                 }
                 else {
                     return;
@@ -45,12 +34,12 @@ namespace ES::Driver::Gpio {
         }
     }
 
-    void extiClearInterrupt(Ch32vPin* pin) {
+    void extiClearInterrupt(IGpio& pin) {
         EXTI_ClearITPendingBit(getExtiLine(pin));
     }
 
-    uint8_t getPortSource(Ch32vPin* pin) {
-        auto port = pin->getPort();
+    uint8_t getPortSource(IGpio& pin) {
+        auto port = reinterpret_cast<GPIO_TypeDef*>(pin.getPort());
         if(port == GPIOA) {
             return GPIO_PortSourceGPIOA;
         }
@@ -73,9 +62,9 @@ namespace ES::Driver::Gpio {
     }
     
 
-    IRQn_Type getInterruptId(Ch32vPin* pin) {
+    IRQn_Type getInterruptId(IGpio& pin) {
 
-        switch(pin->getPin()) {
+        switch(pin.getPin()) {
         case GPIO_Pin_0:
             return EXTI0_IRQn;
         case GPIO_Pin_1:
@@ -105,7 +94,7 @@ namespace ES::Driver::Gpio {
     }
 
     uint8_t getPinSource(Ch32vPin* pin) {
-        auto _pin = pin->getPin();
+        auto _pin = pin.getPin();
         if(_pin == GPIO_Pin_0) {
             return GPIO_PinSource0;
         }
@@ -157,8 +146,8 @@ namespace ES::Driver::Gpio {
         return 0;
     }
 
-    uint32_t getExtiLine(Ch32vPin* pin) {
-        auto _pin = pin->getPin();
+    uint32_t getExtiLine(IGpio& pin) {
+        auto _pin = pin.getPin();
         if(_pin == GPIO_Pin_0) {
             return EXTI_Line0;
         }
@@ -210,7 +199,7 @@ namespace ES::Driver::Gpio {
         return 0;
     }
 
-    void extiConfiguteCallback(Ch32vPin* pin, InterruptCallback* callback){
+    void extiConfiguteCallback(IGpio& pin,InterruptCallback* callback){
         if(callback == nullptr) {
             return;
         }
@@ -224,8 +213,7 @@ namespace ES::Driver::Gpio {
         _extiVectorTable[getPinSource(pin)].pin = pin;
     }
 
-    
-    void configureInterrupt(Ch32vPin* pin, InterruptCallback* callback, InterruptMode trigger = InterruptMode::Falling) {
+    void configureInterrupt(IGpio& pin, PullMode pullMode, InterruptMode trigger = InterruptMode::Falling, InterruptCallback* callback) {
         GPIO_InitTypeDef GPIO_InitStructure = {0};
         EXTI_InitTypeDef EXTI_InitStructure = {0};
         NVIC_InitTypeDef NVIC_InitStructure = {0};
@@ -248,9 +236,9 @@ namespace ES::Driver::Gpio {
             mode = GPIO_Mode_IN_FLOATING;
             trigMode = EXTI_Trigger_Rising_Falling;
         }
-        GPIO_InitStructure.GPIO_Pin = pin->getPin();
+        GPIO_InitStructure.GPIO_Pin = pin.getPin();
         GPIO_InitStructure.GPIO_Mode = mode;
-        GPIO_Init(pin->getPort(), &GPIO_InitStructure);
+        GPIO_Init(reinterpret_cast<GPIO_TypeDef*>(pin.getPort()), &GPIO_InitStructure);
 
         GPIO_EXTILineConfig(getPortSource(pin), getPinSource(pin));
         EXTI_InitStructure.EXTI_Line = getExtiLine(pin);
@@ -273,6 +261,5 @@ namespace ES::Driver::Gpio {
 	extern "C" void EXTI2_IRQHandler(){ ES::Driver::Gpio::handleExti(2, 2); }
 	extern "C" void EXTI3_IRQHandler(){ ES::Driver::Gpio::handleExti(3, 3); }
 	extern "C" void EXTI4_IRQHandler(){ ES::Driver::Gpio::handleExti(4, 4); }
-	extern "C" void EXTI9_5_IRQHandler(){
-         ES::Driver::Gpio::handleExti(5, 9); }
+	extern "C" void EXTI9_5_IRQHandler(){ES::Driver::Gpio::handleExti(5, 9); }
 	extern "C" void EXTI15_10_IRQHandler(){ ES::Driver::Gpio::handleExti(10, 15); }
