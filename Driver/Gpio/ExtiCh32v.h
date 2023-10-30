@@ -5,14 +5,26 @@
 
 namespace ES::Driver::Gpio {
 
+    struct InterruptCallback;
+    bool configureInterrupt(Ch32vPin* pin, PullMode pullMode, InterruptMode interruptMode, InterruptCallback* callback);
+    void releaseInterrupt(InterruptCallback* callback);
+    void releaseInterrupt(Ch32vPin* pin);
+
+    uint32_t getExtiLine(Ch32vPin* pin);
+
+    struct InterruptCallback {
+		/*virtual ~InterruptCallback(){
+			releaseInterrupt(this);
+		}*/
+		virtual void onGpioInterrupt(Ch32vPin* pin) = 0;
+	};
+
     struct ExtiVector {
         IGpio& igpio;
         InterruptCallback* callback = nullptr;
     };
 
     static ExtiVector _extiVectorTable[16];
-
-    uint32_t getExtiLine(IGpio& pin);
 
     void handleExti(int first, int last){
         for(int i = first; i <= last; ++i){

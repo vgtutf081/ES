@@ -441,93 +441,119 @@ namespace ES::Driver::Timer {
         u16 _pwmPinN;
     };
 
-    class PwmCh32vNoOutput {
+    class TimerInputCapture {
     public:
-        PwmCh32vNoOutput(TimerBaseCh32v& tim, u16 channel) : _channel(channel) {
+        TimerInputCapture(TIM_TypeDef* tim, GPIO_TypeDef* port, u16 pin, u16 channel) : _tim(tim), _port(port), _pin(pin), _channel(channel) {
 
-            _tim = tim.getTimPointer();
+            uint32_t timPeriph  = 0;
+            if(tim == TIM1) {
+                timPeriph = RCC_APB2Periph_TIM1;
+                _irq = TIM1_UP_IRQn;
+                RCC_APB2PeriphClockCmd(timPeriph, ENABLE);
+            }
+            else {
+            if(tim == TIM2) {
+                timPeriph = RCC_APB1Periph_TIM2;
+                _irq = TIM2_IRQn;
+            }
+            else if(tim == TIM3) {
+                timPeriph = RCC_APB1Periph_TIM3;
+                _irq = TIM3_IRQn;
+            }
+            else if(tim == TIM4) {
+                timPeriph = RCC_APB1Periph_TIM4;
+                _irq = TIM4_IRQn;
+            }
+            else if(tim == TIM5) {
+                timPeriph = RCC_APB1Periph_TIM5;
+            }
+                RCC_APB1PeriphClockCmd(timPeriph, ENABLE);
+            }
 
-            TIM_OCInitTypeDef TIM_OCInitStructure={0};
+            uint32_t rccPeriph  = 0;
+            if(port == GPIOA) {
+                rccPeriph = RCC_APB2Periph_GPIOA;
+            }
+            else if(port == GPIOB) {
+                rccPeriph = RCC_APB2Periph_GPIOB;
+            }
+            else if(port == GPIOC) {
+                rccPeriph = RCC_APB2Periph_GPIOC;
+            }
+            else if(port == GPIOD) {
+                rccPeriph = RCC_APB2Periph_GPIOD;
+            }
+            else if(port == GPIOE) {
+                rccPeriph = RCC_APB2Periph_GPIOE;
+            }
 
-            TIM_OCInitStructure.TIM_OCMode = TIM_OCMode_PWM2;
-            TIM_OCInitStructure.TIM_OutputState = TIM_OutputState_Disable;
-            TIM_OCInitStructure.TIM_Pulse = 0;
-            TIM_OCInitStructure.TIM_OCPolarity = TIM_OCPolarity_High;
-            TIM_OCInitStructure.TIM_OCIdleState = TIM_OCIdleState_Reset;
-            if(_channel == 1) {
-                TIM_OC1Init(_tim, &TIM_OCInitStructure);
-                TIM_OC1PreloadConfig(_tim, TIM_OCPreload_Disable);
-            }
-            if(_channel == 2) {
-                TIM_OC2Init(_tim, &TIM_OCInitStructure);
-                TIM_OC2PreloadConfig(_tim, TIM_OCPreload_Disable);
-            }
-            if(_channel == 3) {
-                TIM_OC3Init(_tim, &TIM_OCInitStructure);
-                TIM_OC3PreloadConfig(_tim, TIM_OCPreload_Disable);
-            }
-            if(_channel == 4) {
-                TIM_OC4Init(_tim, &TIM_OCInitStructure);
-                TIM_OC4PreloadConfig(_tim, TIM_OCPreload_Disable);
-            }
-            TIM_CtrlPWMOutputs(_tim, ENABLE);
+            RCC_APB2PeriphClockCmd(rccPeriph, ENABLE);
+
+            GPIO_InitTypeDef        GPIO_InitStructure = {0};
+            TIM_ICInitTypeDef       TIM_ICInitStructure = {0};
+            TIM_TimeBaseInitTypeDef TIM_TimeBaseInitStructure = {0};
+            NVIC_InitTypeDef        NVIC_InitStructure = {0};
+
+            GPIO_InitStructure.GPIO_Pin = pin;
+            GPIO_InitStructure.GPIO_Mode = GPIO_Mode_IN_FLOATING;
+            GPIO_Init(port, &GPIO_InitStructure);
+            GPIO_ResetBits(port, pin);
+
+            TIM_TimeBaseInitStructure.TIM_Period = 0xFFFF;
+            TIM_TimeBaseInitStructure.TIM_Prescaler = 14 - 1;
+            TIM_TimeBaseInitStructure.TIM_ClockDivision = TIM_CKD_DIV1;
+            TIM_TimeBaseInitStructure.TIM_CounterMode = TIM_CounterMode_Up;
+
+            TIM_TimeBaseInitStructure.TIM_RepetitionCounter = 0x00;
+            TIM_TimeBaseInit(TIM2, &TIM_TimeBaseInitStructure);
+
+            TIM_ICInitStructure.TIM_Channel = channel;
+            TIM_ICInitStructure.TIM_ICPrescaler = TIM_ICPSC_DIV1;
+            TIM_ICInitStructure.TIM_ICFilter = 0x00;
+            TIM_ICInitStructure.TIM_ICPolarity = TIM_ICPolarity_Rising;
+            TIM_ICInitStructure.TIM_ICSelection = TIM_ICSelection_DirectTI;
+
+            TIM_PWMIConfig(TIM2, &TIM_ICInitStructure);
+
+            NVIC_InitStructure.NVIC_IRQChannel = TIM2_IRQn;
+            NVIC_InitStructure.NVIC_IRQChannelPreemptionPriority = 2;
+            NVIC_InitStructure.NVIC_IRQChannelSubPriority = 0;
+            NVIC_InitStructure.NVIC_IRQChannelCmd = ENABLE;
+            NVIC_Init(&NVIC_InitStructure);
+
+            TIM_SelectInputTrigger(TIM2, TIM_TS_TI2FP2);
+            TIM_SelectSlaveMode(TIM2, TIM_SlaveMode_Reset);
+            TIM_SelectMasterSlaveMode(TIM2, TIM_MasterSlaveMode_Disable);
+
+            TIM_ITConfig(TIM2, TIM_IT_CC1 | TIM_IT_CC2, ENABLE);
+
+            TIM_Cmd(TIM2, ENABLE);
+        } 
+
+        TimerInputCapture() {
+            
         }
 
-        PwmCh32vNoOutput() {
-
-        }
-
-        bool setParams(float duty) {
-            if(_channel == 1) {
-                _tim->CH1CVR = static_cast<uint16_t>(duty * _tim->ATRLR);
-            }
-            else if(_channel == 2) {
-                _tim->CH2CVR = static_cast<uint16_t>(duty * _tim->ATRLR);
-            }
-            else if(_channel == 3) {
-                _tim->CH3CVR = static_cast<uint16_t>(duty * _tim->ATRLR);
-            }
-            else if(_channel == 4) {
-                _tim->CH4CVR = static_cast<uint16_t>(duty * _tim->ATRLR);
-            }
-            return true;
-        }
-
-        void start() {
-            if(_channel == 1) {
-                _tim->CCER |= TIM_CC1E;
-            }
-            else if(_channel == 2) {
-                _tim->CCER |= TIM_CC2E;
-            }
-            else if(_channel == 3) {
-                _tim->CCER |= TIM_CC3E;
-            }
-            else if(_channel == 4) {
-                _tim->CCER |= TIM_CC4E;
+        void setIrq(uint8_t priority, uint16_t event = TIM_IT_Update) {
+            TIM_ClearITPendingBit(_tim, event);
+            _irqEvent = event;
+            if(event == TIM_IT_Update) {
+                NVIC_InitTypeDef NVIC_InitStructure;
+                NVIC_InitStructure.NVIC_IRQChannel = _irq;
+                NVIC_InitStructure.NVIC_IRQChannelPreemptionPriority = priority;
+                NVIC_InitStructure.NVIC_IRQChannelSubPriority = 1;
+                NVIC_InitStructure.NVIC_IRQChannelCmd = ENABLE;
+                NVIC_Init(&NVIC_InitStructure);
+                TIM_ITConfig(_tim, event, ENABLE);
             }
         }
 
-        void stop() {
-            if(_channel == 1) {
-                _tim->CCER &= ~TIM_CC1E;
-            }
-            else if(_channel == 2) {
-                _tim->CCER &= ~TIM_CC2E;
-            }
-            else if(_channel == 3) {
-                _tim->CCER &= ~TIM_CC3E;
-            }
-            else if(_channel == 4) {
-                _tim->CCER &= ~TIM_CC4E;
-            }
-        }
-
-                
     private:
-
         u16 _channel;
-        u16 _ccp = 0;
+        u16 _pin;
+        GPIO_TypeDef* _port;
+        uint16_t _irqEvent;
+        IRQn _irq;
         TIM_TypeDef* _tim;
     };
 }

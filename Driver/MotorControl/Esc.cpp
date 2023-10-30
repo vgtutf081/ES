@@ -20,12 +20,12 @@ extern "C" {
         }
     }
 
-    void TIM2_IRQHandler(void) __attribute__((interrupt()));
-    void TIM2_IRQHandler(void) {
-        if (TIM_GetITStatus(TIM2, TIM_IT_Update) != RESET)
+    void TIM4_IRQHandler(void) __attribute__((interrupt()));
+    void TIM4_IRQHandler(void) {
+        if (TIM_GetITStatus(TIM4, TIM_IT_Update) != RESET)
         {   
-            TIM_ClearITPendingBit(TIM2, TIM_IT_Update);
-            escPtr->intTim2Callback();
+            TIM_ClearITPendingBit(TIM4, TIM_IT_Update);
+            escPtr->intTim4Callback();
         }
     }
 
