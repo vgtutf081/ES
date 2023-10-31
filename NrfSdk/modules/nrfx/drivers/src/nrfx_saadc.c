@@ -90,6 +90,7 @@ typedef struct
 } nrfx_saadc_cb_t;
 
 static nrfx_saadc_cb_t m_cb;
+static void* userContext = NULL;
 
 #define LOW_LIMIT_TO_FLAG(channel)      ((2 * channel + 1))
 #define HIGH_LIMIT_TO_FLAG(channel)     ((2 * channel))
@@ -130,7 +131,7 @@ void nrfx_saadc_irq_handler(void)
                     nrf_saadc_task_trigger(NRF_SAADC_TASK_START);
                 }
             }
-            m_cb.event_handler(&evt);
+            m_cb.event_handler(&evt, userContext);
             m_cb.conversions_end = false;
         }
     }
@@ -174,7 +175,7 @@ void nrfx_saadc_irq_handler(void)
 
         nrfx_saadc_evt_t evt;
         evt.type = NRFX_SAADC_EVT_CALIBRATEDONE;
-        m_cb.event_handler(&evt);
+        m_cb.event_handler(&evt, userContext);
     }
     if (nrf_saadc_event_check(NRF_SAADC_EVENT_STOPPED))
     {
@@ -203,7 +204,7 @@ void nrfx_saadc_irq_handler(void)
                 NRFX_LOG_DEBUG("Event limit, channel: %d, limit type: %d.",
                                evt.data.limit.channel,
                                evt.data.limit.limit_type);
-                m_cb.event_handler(&evt);
+                m_cb.event_handler(&evt, userContext);
             }
         }
     }
@@ -235,6 +236,8 @@ nrfx_err_t nrfx_saadc_init(nrfx_saadc_config_t const * p_config,
     m_cb.active_channels      = 0;
     m_cb.limits_enabled_flags = 0;
     m_cb.conversions_end      = false;
+
+    userContext = p_config->context;
 
     nrf_saadc_int_disable(NRF_SAADC_INT_ALL);
     nrf_saadc_event_clear(NRF_SAADC_EVENT_END);

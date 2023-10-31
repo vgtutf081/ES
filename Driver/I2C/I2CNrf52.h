@@ -4,6 +4,8 @@
 #include "nrfx_twim.h"
 
 #include "ThreadFreeRtos.h"
+#include "Semaphore.h"
+#include "ActionLock.h"
 
 #include <array>
 
@@ -14,17 +16,20 @@ namespace ES::Driver::I2C {
         EventCallback callback = nullptr;
     };
 
+    static constexpr TickType_t MaxDelayTransfer = 1000 * portTICK_PERIOD_MS;
+
     class I2CNrf52 : public II2C{
     public:
-        explicit I2CNrf52 (nrfx_twim_t instance, uint32_t sda, uint32_t scl, I2Сcallback* callback, nrf_twim_frequency_t frequency = NRF_TWIM_FREQ_400K) : _instance(instance), _sda(sda), _scl(scl), _callback(callback), _frequency(frequency) {
+        explicit I2CNrf52 (nrfx_twim_t instance, uint32_t sda, uint32_t scl, I2Сcallback::EventCallback callback = nullptr, nrf_twim_frequency_t frequency = NRF_TWIM_FREQ_400K) : _instance(instance), _sda(sda), _scl(scl), _frequency(frequency) {
             ret_code_t ret;
             nrfx_twim_config_t twi_config;
             twi_config.scl                = _scl;
             twi_config.sda                = _sda;
-
             twi_config.frequency          = _frequency;
             twi_config.interrupt_priority = NRFX_TWIM_DEFAULT_CONFIG_IRQ_PRIORITY;
             twi_config.hold_bus_uninit    = false;
+
+            _callback.callback = callback;
 
             ret = nrfx_twim_init(&_instance, &twi_config, i2cEventHandlerStatic, this);
             if(ret == NRF_SUCCESS) {
@@ -35,13 +40,16 @@ namespace ES::Driver::I2C {
         bool read(uint16_t address, uint8_t *buffer, size_t size) override {
             ret_code_t ret;
             yieldForBusy();
+            if(!acquire()){ return false;}
             ret = nrfx_twim_rx(&_instance, address >> 1, buffer, size);
-            return ret == NRF_SUCCESS;
+            bool status = (ret == NRF_SUCCESS) & _endOfTransfer.take(MaxDelayTransfer);
+            release();
+            return status;
         }
 
         bool write(uint16_t address, const uint8_t *buffer, size_t size) override {
             ret_code_t ret;
-            
+            if(!acquire()){ return false;}
             auto pointer = buffer;
 
         	if(!nrfx_is_in_ram(pointer)) {
@@ -51,7 +59,9 @@ namespace ES::Driver::I2C {
             yieldForBusy();
             ret = nrfx_twim_tx(&_instance, address >> 1, static_cast<const uint8_t*>(pointer), size, false);
 
-            return ret == NRF_SUCCESS;
+            bool status = (ret == NRF_SUCCESS) & _endOfTransfer.take(MaxDelayTransfer);
+            release();
+            return status;
         }
 
         bool read(uint16_t address, std::uint16_t memAddress, size_t memAddressBitCount, uint8_t* buffer, size_t size) override {
@@ -74,11 +84,8 @@ namespace ES::Driver::I2C {
             }
 
             std::size_t beginData = pasteAddress(memAddress, memAddressBitCount);
-
             std::memcpy(&_buf[beginData], buffer, size);
-
             result = write(address, _buf.data(), transferSize);
-
             return result;
         }
 
@@ -101,8 +108,11 @@ namespace ES::Driver::I2C {
         }
 
         void i2cEventHandler(nrfx_twim_evt_type_t p_event) {
-            if(_callback->callback != nullptr) {
-                _callback->callback(p_event);
+            if(p_event == nrfx_twim_evt_type_t::NRFX_TWIM_EVT_DONE) {
+                _endOfTransfer.give();
+            }
+            if(_callback.callback != nullptr) {
+                _callback.callback(p_event);
             }
         }
 
@@ -117,8 +127,23 @@ namespace ES::Driver::I2C {
             }
         }
 
-        I2Сcallback* _callback;
+        bool acquire(){
+            if(_transferLock.tryLock()){
+                _acquired = true;
+                return true;
+            }
+            return false;
+        }
 
+        void release(){
+            _acquired = false;
+            _transferLock.unlock();
+        }
+        bool _acquired = false;
+        Threading::ActionLock _transferLock;
+
+        I2Сcallback _callback;
+        Threading::BinarySemaphore _endOfTransfer {};
         nrf_twim_frequency_t _frequency;
         nrfx_twim_t _instance;
         uint32_t _sda;
