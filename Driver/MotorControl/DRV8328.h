@@ -2,7 +2,6 @@
 
 #include "IGpio.h"
 #include "TimerCh32.h"
-#include "Semaphore.h"
 #include "Bldc.h"
 
 namespace ES::Driver::MotorControl {

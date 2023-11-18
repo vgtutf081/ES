@@ -1,7 +1,6 @@
 #pragma once
 
 #include "Gpio.h"
-#include "ITimer.h"
 
 namespace ES::Driver::Gpio {
     

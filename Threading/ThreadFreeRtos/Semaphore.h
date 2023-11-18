@@ -21,11 +21,11 @@ namespace ES::Threading {
             vSemaphoreDelete(_handle);
         }
 
-        bool give(bool yieldFromISR = true) {
+        bool give() {
 			return xSemaphoreGive(_handle) == pdTRUE;
         }
 
-        bool giveFromIsr(bool yieldFromISR = true) {
+        bool giveFromIsr() {
 			return (xSemaphoreGiveFromISR(_handle, pdFALSE) != pdTRUE);
 
         }

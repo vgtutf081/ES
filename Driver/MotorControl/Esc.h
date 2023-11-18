@@ -3,10 +3,6 @@
 #include "DRV8328.h"
 #include "AdcCh32v.h"
 #include "TimerCh32.h"
-#include "ThreadFreeRtos.h"
-#include "Semaphore.h"
-#include "TimerRtos.h"
-#include "CriticalSection.h"
 
 #include "GpioCh32v.h"
 
@@ -35,7 +31,7 @@ namespace ES::Driver::MotorControl {
 
 #if defined(BR2205)
     static constexpr float MinThrottle = 0.2f;
-    static constexpr float MaxThrottle = 0.7f;
+    static constexpr float MaxThrottle = 0.8f;
     static constexpr float OpenThrottle = 0.4f;
 
 #elif defined(BROTHER_HOBBY)
@@ -50,8 +46,10 @@ namespace ES::Driver::MotorControl {
     static constexpr uint16_t MinimumThrottle = (Torque * MinThrottle);
     static constexpr uint16_t OpenLoopThrottle = (Torque * OpenThrottle);
     static constexpr uint16_t MaximumThrottle = (Torque * MaxThrottle);
-    static constexpr uint32_t Period = (MaximumThrottle) - MinimumThrottle;
+    static constexpr uint32_t Period = MaximumThrottle - MinimumThrottle;
     static constexpr uint16_t AdcMax = 4000;
+
+    static constexpr uint16_t minimalChangeDuty = 3;
 
     static constexpr float DshotThrottleMaxValue = 2047.0f;
 
@@ -85,8 +83,8 @@ namespace ES::Driver::MotorControl {
             updateInputVoltage(inputVoltage);
             _drv.setTorque(Torque);
             _drv.init();
-            Threading::sleepForMs(1000);
             _drv.startPwm();
+            ADC_ITConfig(ADC1, ADC_IT_JEOC, ENABLE);
         }
 
         void parseCallback(uint8_t throttle) {
@@ -94,8 +92,8 @@ namespace ES::Driver::MotorControl {
         }
 
         void motorStart() {
-            _drv.setCompare(OpenLoopThrottle);
             _currentThrottle = OpenLoopThrottle;
+            _drv.setCompare(_currentThrottle);
             openLoopStart();
         }
 
@@ -120,12 +118,55 @@ namespace ES::Driver::MotorControl {
 
         void setThrottleByDshot(uint16_t value) {
             if(value == 0) {
+                //_currentThrottle = 0;
                 _targetThrottle = 0;
-                return;
+                //motorStop();
+                //Delay_Ms(1000);
             }
-            float tmp = static_cast<float>(value) * (static_cast<float>(Period) / DshotThrottleMaxValue);
-            _targetThrottle = static_cast<uint16_t>(tmp) + MinimumThrottle;
-            asm("nop");
+            else {
+                float tmp = static_cast<float>(value) * (static_cast<float>(Period) / DshotThrottleMaxValue);
+                _targetThrottle = static_cast<uint16_t>(tmp) + MinimumThrottle;
+            }
+            if(_targetThrottle > _currentThrottle) {
+                if(_state == MotorState::Idle) {
+                    motorStart();
+                }
+            }
+            if(_currentThrottle == 0) {
+                motorStop();
+                Delay_Ms(500);
+            }
+            //calcNewThrottle();
+        }
+
+        void calcNewThrottle() {
+            uint16_t diff = 0;
+            if(_targetThrottle > _currentThrottle) {
+                if(_state == MotorState::Started) {
+                    diff = _targetThrottle - _currentThrottle;
+                    if(diff < minimalChangeDuty) {
+                        _currentThrottle = _targetThrottle;
+                    }
+                    else {
+                        _currentThrottle += minimalChangeDuty;
+                    }
+                    //_drv.setCompare(_currentThrottle);
+                }
+            }
+            else if(_targetThrottle < _currentThrottle) {
+                if(_state != MotorState::Idle) {
+                    if(_state == MotorState::Started) { 
+                        diff = _currentThrottle - _targetThrottle;
+                        if(diff < minimalChangeDuty) {
+                            _currentThrottle = _targetThrottle;
+                        }
+                        else {
+                            _currentThrottle -= minimalChangeDuty;
+                        }
+                    //_drv.setCompare(_currentThrottle);
+                    }
+                }
+            }
         }
 
         void switchPhase(Bldc::Step step) {
@@ -209,6 +250,7 @@ namespace ES::Driver::MotorControl {
 
         void intTim3Callback() {
             _drv._timComplimentary.triggerDisable();
+            //_drv.setCompare(_targetThrottle);
             nextStep();
             _measureTimer.stop();
             _measureTimer.setCounter(0);
@@ -216,6 +258,8 @@ namespace ES::Driver::MotorControl {
             _adcFlag = true;
             _stepCommutationTimer.stop();
             _stepCommutationTimer.setCounter(0);
+            calcNewThrottle();
+            _drv.setCompare(_currentThrottle);
         }
 
         void intTim1Callback() {
@@ -226,107 +270,11 @@ namespace ES::Driver::MotorControl {
 
         void intTim4Callback() {
             motorStop();
-            motorStart();
+            //motorStart();
         }
 
-        void updateInputVoltage(uint32_t adcValue) {
-            _inputVoltage = _adc.getVoltageMv<10000, 2200>(adcValue);
-            _halfSupplyAdcValue = adcValue / 2;
-        }
-
-        void motorStop() {
-            _measureTimer.stop();
-            _measureTimer.setCounter(0);
-            _stepCommutationTimer.stop();
-            _stepCommutationTimer.setCounter(0);
-            _drv.deCommutate(Bldc::MotorPhase::A);
-            _drv.deCommutate(Bldc::MotorPhase::B);
-            _drv.deCommutate(Bldc::MotorPhase::C);
-            _adc.disable();
-            _state = MotorState::Idle;
-            _currentThrottle = 0;
-            _drv.setCompare(_currentThrottle);
-            //Threading::sleepForMs(1000);
-        }
-
-        void reverseDirection() {
-            motorStop();
-            Threading::sleepForMs(1000);
-            _forwardDirection = !_forwardDirection;
-            motorStart();
-        }
-
-        uint32_t getSpeedRpm() {
-            return _rpm;
-        }
-
-        MotorState getState() {
-            return _state;
-        }
-
-    private:
-
-        Threading::Thread _speedControlHandle{"speedControl", 256, Threading::ThreadPriority::Normal,  [this](){
-            uint16_t diff = 0;
-            while(true) {
-                if(_targetThrottle > _currentThrottle) {
-                    if(_state == MotorState::Idle) {
-                        motorStart();
-                    }
-                    if(_state == MotorState::Started) {
-                        diff = _targetThrottle - _currentThrottle;
-                        diff = diff * 0.1f;
-                        if(diff < 5) {
-                            diff = 4;
-                        }
-                        _currentThrottle = _currentThrottle + diff;
-                        _drv.setCompare(_currentThrottle);
-                    }
-                }
-                else if(_targetThrottle < _currentThrottle) {
-                    if(_state != MotorState::Idle) {
-                        diff = _currentThrottle - _targetThrottle;
-                        diff = diff * 0.1f;
-                        if(diff < 5) {
-                            diff = 4;
-                        }
-                        _currentThrottle = _currentThrottle - diff;
-                        _drv.setCompare(_currentThrottle);
-
-                        if(_targetThrottle == 0) {
-                            _currentThrottle = 0;
-                            motorStop();
-                            Threading::sleepForMs(500);
-                        }
-                    }
-                }
-
-                Threading::sleepForMs(10);
-            }
-        }};
-
-        Threading::Thread _motorTorqueHandle{"MotorTorqueControl", 256, Threading::ThreadPriority::Normal,  [this](){
-            uint16_t counter = 0;
-
-            bool bemfFlag = false;
-
-            uint8_t index = 0;
-            size_t currentSize = 0;
-            uint32_t sum = 0;
-
-            while(true) {
-                while(!ADC_GetFlagStatus(ADC1, ADC_FLAG_JEOC)) {
-                    Threading::yield();
-                }
-                ADC_ClearFlag(ADC1, ADC_FLAG_JEOC);
-
-                Threading::CriticalSection _lock{};
-
-                //adcValueA = ADC1->IDATAR1;
-                //adcValueB = ADC1->IDATAR2;
-                //adcValueC = ADC1->IDATAR3;
-
-                if(_bemfPhase == Bldc::MotorPhase::A) { 
+        void intAdcCallback() {
+            if(_bemfPhase == Bldc::MotorPhase::A) { 
                     _adcValue = ADC1->IDATAR1;
                 }
                 if(_bemfPhase == Bldc::MotorPhase::B) { 
@@ -351,74 +299,72 @@ namespace ES::Driver::MotorControl {
                         //counter = _measureTimer.getCounter() - ProcessingDelay;
 
                         counter = _counter;
-                        /*sum = 0;
-                        buf[index] = static_cast<uint16_t>(counter);
-                        index++;
-                        if(index == windowSize) {
-                            index = 0;
-                        }
-                        if(currentSize != windowSize) {
-                            currentSize++;
-                        }
-                        for(uint8_t i = 0; i < currentSize; i++)  {
-                            sum += buf[i];
-                        }
-                        sum /= currentSize;
-                        _currentSwitchPeriod = sum * 2;
-                        _stepCommutationTimer.setPeriod(sum);*/
+
                         _stepCommutationTimer.setPeriod(counter);
                         _stepCommutationTimer.start();
-
-                        /*if(!_stopWatch.isStarted()) {
-                            _stopWatch.start();
-                            _stepFullCircleCount++;
-                        }
-                        else if(_stepFullCircleCount == CommutationFullCircle) {
-                            _stepFullCircleCount = 0;
-                            _stopWatch.stop();
-                        }
-                        else {
-                            _stepFullCircleCount++;
-                        }*/
                     }
-                }
-            }
-        }};
-
-        Threading::Thread _motorStartHandle{"MotorStartControl", 256, Threading::ThreadPriority::Normal,  [this](){
-            uint32_t currentPeriod = 0;
-            while(true) {
-                if(_openLoopStart) {
-                    //Threading::sleepForMs(100);
-                    _openLoopStart = false;
-                    nextStep();
-                    Threading::sleepForMs(5);
-
-                    currentPeriod = OpenLoopStartPeriod;
-                    while(currentPeriod > OpenLoopEndPeriod) {
-                        Threading::sleepForUs(currentPeriod);
-                        currentPeriod /= OpenLoopAcceleration;
-                        nextStep();
                     }
-                    _measureTimer.setIrq(0);
-                    _measureTimer.start();
+        }
 
-                    _stepCommutationTimer.setIrq(0);
-                    _stepCommutationTimer.setPeriod(OpenLoopEndPeriod  * TimerDiv);
-                    _stepCommutationTimer.start();
-                    _adc.enable();
-                    _drv._timComplimentary.setIrq(0);
-                    _targetThrottle = MinimumThrottle;
-                    //_drv.setCompare(MinimumThrottle);
-                    _state = MotorState::Started;
-                }
-                Threading::sleepForMs(100);
-            }
-        }};
+        void updateInputVoltage(uint32_t adcValue) {
+            _inputVoltage = _adc.getVoltageMv<10000, 2200>(adcValue);
+            _halfSupplyAdcValue = adcValue / 2;
+        }
+
+        void motorStop() {
+            _measureTimer.stop();
+            _measureTimer.setCounter(0);
+            _stepCommutationTimer.stop();
+            _stepCommutationTimer.setCounter(0);
+            _drv.deCommutate(Bldc::MotorPhase::A);
+            _drv.deCommutate(Bldc::MotorPhase::B);
+            _drv.deCommutate(Bldc::MotorPhase::C);
+            _adc.disable();
+            _state = MotorState::Idle;
+            _currentThrottle = 0;
+            _drv.setCompare(_currentThrottle);
+        }
+
+        void reverseDirection() {
+            motorStop();
+            _forwardDirection = !_forwardDirection;
+            motorStart();
+        }
+
+        uint32_t getSpeedRpm() {
+            return _rpm;
+        }
+
+        MotorState getState() {
+            return _state;
+        }
+
+    private:
 
         void openLoopStart() {
             _state = MotorState::OpenLoop;
-            _openLoopStart = true;
+            uint32_t currentPeriod = 0;
+            nextStep();
+            Delay_Ms(5);
+            currentPeriod = OpenLoopStartPeriod;
+            while(currentPeriod > OpenLoopEndPeriod) {
+                Delay_Us(currentPeriod);
+                currentPeriod /= OpenLoopAcceleration;
+                nextStep();
+            }
+            _measureTimer.setIrq(0);
+            _measureTimer.start();
+
+            _stepCommutationTimer.setIrq(0);
+            _stepCommutationTimer.setPeriod(OpenLoopEndPeriod  * TimerDiv);
+            _stepCommutationTimer.start();
+            _adc.enable();
+            _drv._timComplimentary.setIrq(0);
+            //_targetThrottle = MinimumThrottle;
+            //_drv.setCompare(MinimumThrottle);
+            _state = MotorState::Started;
+            //Delay_Us(OpenLoopEndPeriod);
+            Delay_Ms(OpenLoopEndPeriod);
         }
 
         MotorState _state = MotorState::Idle;
@@ -431,15 +377,11 @@ namespace ES::Driver::MotorControl {
         Bldc::MotorPhase _bemfPhase;
         Bldc::BemfEdge _bemfEdge;
 
-        Threading::StopWatch _stopWatch{};
-
         bool _forwardDirection = false;
 
         uint32_t _rpm = 0;
         uint32_t _currentSwitchPeriod = 0;
         uint32_t _stepFullCircleCount = 0;
-
-        Threading::BinarySemaphore _tim2Event;
         bool _openLoopStart;
 
         float _inputVoltage = 0; 
@@ -459,6 +401,15 @@ namespace ES::Driver::MotorControl {
 
         Timer::TimerBaseCh32v _measureTimer = {timMeas, 0xFFFF, TimerDiv};
         Timer::TimerBaseCh32v _stepCommutationTimer = {timComm, 0xFFFF, TimerDiv};
+
+
+        uint16_t counter = 0;
+
+            bool bemfFlag = false;
+
+            uint8_t index = 0;
+            size_t currentSize = 0;
+            uint32_t sum = 0;
         
     };
 
