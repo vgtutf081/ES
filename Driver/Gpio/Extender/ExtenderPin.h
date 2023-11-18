@@ -10,19 +10,19 @@ namespace ES::Driver::Gpio {
         using Extender = PCA9554x;
         using ID = Extender::ID;
     public:
-        ExtenderPin(Extender& extender, ID id) : _extender(extender), _id(id) {
+        constexpr ExtenderPin(Extender& extender, ID id) : _extender(extender), _id(id) {
 
         }
 
         void set() override {
-            _pinStatus = true;
             _extender.set(_id);
+            _pinStatus = true;
         }
 
         void reset() override {
-            _pinStatus = false;
             _extender.reset(_id);
-        }
+            _pinStatus = false;
+        };
 
         void toggle() override {
             if(_pinStatus) {
@@ -33,17 +33,36 @@ namespace ES::Driver::Gpio {
             }
         }
 
-        bool read() override {
+        bool read() const override {
             return _extender.read(_id);
         }
 
         void disable() override {
-            
+
         }
 
-        void setMode(PinMode mode, DriveMode driveMode, PullMode pullMode) override {
+        uint32_t getPin() const override {
+            return 0;
+        }
+
+        uint32_t getPort() const override {
+            return 0;
+        }
+
+        uint32_t getPortAndPin() const override {
+            return 0;
+        }
+
+        void setMode(PinMode mode) override {
             _extender.setMode(_id, mode);
         }
+
+        void setPullMode(PullMode mode) override {
+        }
+
+        void setDriveMode(DriveMode mode) override {
+        }
+
 
     private:
         bool _pinStatus = false;

@@ -118,6 +118,7 @@ typedef struct
     nrf_saadc_oversample_t oversample;         ///< Oversampling configuration.
     uint8_t                interrupt_priority; ///< Interrupt priority.
     bool                   low_power_mode;     ///< Indicates if low power mode is active.
+    void*	context;
 } nrfx_saadc_config_t;
 
 /** @brief SAADC driver event types. */
@@ -159,7 +160,7 @@ typedef struct
  * @param[in] p_event Pointer to an SAADC driver event. The event structure is allocated on
  *                    the stack, so it is valid only within the context of the event handler.
  */
-typedef void (* nrfx_saadc_event_handler_t)(nrfx_saadc_evt_t const * p_event);
+typedef void (* nrfx_saadc_event_handler_t)(nrfx_saadc_evt_t const * p_event, void* context);
 
 /**
  * @brief Function for initializing the SAADC.

@@ -14,7 +14,12 @@ namespace ES::Driver::Gpio {
     enum class DriveMode : uint32_t {
         PushPull = NRF_GPIO_PIN_S0S1,
         OpenDrain = NRF_GPIO_PIN_S0D1,
-        None = 0
+        HighDrive0Standart1 = NRF_GPIO_PIN_H0S1,
+        Standart0HighDrive1 = NRF_GPIO_PIN_S0H1,
+        HighDrive0HighDrive1 = NRF_GPIO_PIN_H0H1,
+        Disconnect0Standart1 = NRF_GPIO_PIN_D0S1,
+        Disconnect0HighDrive1 = NRF_GPIO_PIN_D0H1,
+        HighDrive0Disconnect1 = NRF_GPIO_PIN_H0D1
     };
 
     enum class PinMode : uint32_t {

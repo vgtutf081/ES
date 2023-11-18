@@ -5,6 +5,7 @@
 
 #include <bitset>
 #include <functional>
+#include "ThreadFreeRtos.h"
 
 namespace ES::Driver::Gpio {
 
@@ -43,16 +44,17 @@ class PCA9554x {
             }
             _address = _address << 1;
         }
-
+        
         bool set(ID pin) {
-            return readModifyWriteRegister(static_cast<uint8_t>(Register::Output), [&](uint8_t& value) {
+            return readModifyWriteRegister(static_cast<uint8_t>(Register::Output), static_cast<uint8_t>(Register::Output), [&](uint8_t& value) {
                 value &= ~(1 << pin.getPin());
                 value |= 1 << pin.getPin();
+                asm("nop");
             });
         }
 
 	    bool reset(ID pin) {
-            return readModifyWriteRegister(static_cast<uint8_t>(Register::Output), [&](uint8_t& value) {
+            return readModifyWriteRegister(static_cast<uint8_t>(Register::Output), static_cast<uint8_t>(Register::Output), [&](uint8_t& value) {
                 value &= ~(1 << pin.getPin());
                 value |= 0 << pin.getPin();
             });
@@ -82,18 +84,19 @@ class PCA9554x {
                 break;
             }
 
-            return readModifyWriteRegister(static_cast<uint8_t>(Register::Configuration), [&](uint8_t& value) {
+            return readModifyWriteRegister(static_cast<uint8_t>(Register::Configuration), static_cast<uint8_t>(Register::Configuration), [&](uint8_t& value) {
                 value &= ~(1 << pin.getPin());
                 value |= static_cast<bool>(_extenderPinMode) << pin.getPin();
             });
         }
     private:
 
-        bool readModifyWriteRegister(uint8_t address, std::function<void(uint8_t&)> modifyRegister) {
+        bool readModifyWriteRegister(uint8_t addressRead, uint8_t addressWrite, std::function<void(uint8_t&)> modifyRegister) {
             uint8_t reg = 0;
-            bool result = _i2c.read(_address, address, memAddressBitCount, &reg, 1);
+            bool result = _i2c.read(_address, addressRead, memAddressBitCount, &reg, 1);
+            //Threading::sleepForMs(10);
             modifyRegister(reg);
-            result = _i2c.write(_address, address, memAddressBitCount, &reg, 1);
+            result = _i2c.write(_address, addressWrite, memAddressBitCount, &reg, 1);
             return result;
         }
         I2C::II2C& _i2c;

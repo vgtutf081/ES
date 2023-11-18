@@ -15,6 +15,7 @@ target_sources(${PROJECT_NAME}
     ThreadFreeRtos/FreeRtosQueue.h
     ThreadFreeRtos/ThreadFreeRtos.cpp
     ThreadFreeRtos/TimerRtos.h
+    ThreadFreeRtos/ActionLock.h
 )
 
 target_compile_definitions(Threading INTERFACE

@@ -10,6 +10,16 @@ namespace ES::Threading {
     static constexpr TickType_t maxDelay = portMAX_DELAY;
         
         bool take(TickType_t wait = portMAX_DELAY) {
+#if defined(NRF)
+            if(isInterruptHandling()) {
+                portBASE_TYPE taskWoken = pdFALSE;
+                if(!takeFromIsr()) {
+                    return false;
+                }
+                portEND_SWITCHING_ISR(taskWoken);
+                return true;
+            }
+#endif
 			return xSemaphoreTake(_handle, wait) == pdTRUE;
 		}
 
@@ -21,11 +31,21 @@ namespace ES::Threading {
             vSemaphoreDelete(_handle);
         }
 
-        bool give() {
-			return xSemaphoreGive(_handle) == pdTRUE;
+        bool give(bool yieldFromISR = true) {
+#if defined(NRF)
+            portBASE_TYPE taskWoken = pdFALSE;
+            if(isInterruptHandling()) {
+                if(!giveFromIsr()) {
+                    return false;
+                }
+                portEND_SWITCHING_ISR(taskWoken);
+                return true;
+            }
+#endif
+            return xSemaphoreGive(_handle) == pdTRUE;
         }
 
-        bool giveFromIsr() {
+        bool giveFromIsr(bool yieldFromISR = true) {
 			return (xSemaphoreGiveFromISR(_handle, pdFALSE) != pdTRUE);
 
         }

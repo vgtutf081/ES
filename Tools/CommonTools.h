@@ -1,5 +1,10 @@
 #pragma once
 
+#define ES_PP_CMSIS_UNWRAP_PERIPH_ADDRESS1(__id) ES_PP_DROP __id
+#define ES_PP_CMSIS_UNWRAP_PERIPH_ADDRESS(__id)  ES_PP_CMSIS_UNWRAP_PERIPH_ADDRESS1 __id
+
+#define ES_PP_DROP(Expression)
+
 namespace ES::CommonTools {
     inline size_t charArraySize(const char* c) {
         size_t size = 0;
