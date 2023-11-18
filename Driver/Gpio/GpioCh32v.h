@@ -8,7 +8,7 @@
 
 namespace ES::Driver::Gpio {
 
-    class Ch32vPin : public IGpio {
+    class Ch32vPin {
         public:
         Ch32vPin(GPIO_TypeDef* port, uint16_t pin) : _port(port), _pin(pin) {
             uint32_t rccPeriph  = 0;
@@ -32,26 +32,26 @@ namespace ES::Driver::Gpio {
             RCC_APB2PeriphClockCmd(rccPeriph,ENABLE);
         }
 
-        uint32_t getPin() const override  {
+        uint32_t getPin() const   {
             return _pin;
         }
 
-        uint32_t getPort() const override {
+        uint32_t getPort() const  {
             return reinterpret_cast<uint32_t>(_port);
             
         }
 
-        void set() override {
+        void set()  {
             GPIO_SetBits(_port, _pin);
             _pinSet = true;
         }
 
-        void reset() override {
+        void reset()  {
             GPIO_ResetBits(_port, _pin);
             _pinSet = false;
         }
 
-        void toggle() override {
+        void toggle()  {
             if(_pinSet) {
                 reset();
             }
@@ -60,20 +60,28 @@ namespace ES::Driver::Gpio {
             }
         }
 
-        uint32_t getPortAndPin() const override {
+        uint32_t getPortAndPin() const  {
             return 0;
         }
 
-        bool read() const override {
+        bool read() const  {
             return GPIO_ReadInputDataBit(_port, _pin);
         }
 
-        void disable() override {
+        void disable()  {
             GPIO_InitTypeDef  GPIO_InitStructure={0};
             GPIO_InitStructure.GPIO_Pin = _pin;
             GPIO_InitStructure.GPIO_Mode = GPIO_Mode_IN_FLOATING;
             GPIO_InitStructure.GPIO_Speed = GPIO_Speed_50MHz;
             GPIO_Init(_port, &GPIO_InitStructure);
+        }
+
+        inline void configureOutput(DriveMode driveMode = DriveMode::PushPull, PullMode pullMode = PullMode::None) {
+            setMode(PinMode::Output, driveMode, pullMode);
+        }
+
+        inline void configureInput(PullMode pullMode = PullMode::None) {
+            setMode(PinMode::Input, DriveMode::None, pullMode);
         }
 
         void setMode(PinMode mode, DriveMode drive, PullMode pull) {
