@@ -1,0 +1,128 @@
+set(LIBRARY_NAME NrfSdk802154)
+
+add_library(${LIBRARY_NAME} INTERFACE)
+
+target_include_directories(${LIBRARY_NAME}
+    INTERFACE
+        ${CMAKE_CURRENT_SOURCE_DIR}
+        "${CMAKE_CURRENT_SOURCE_DIR}"
+        "${CMAKE_CURRENT_SOURCE_DIR}/src"
+        "${CMAKE_CURRENT_SOURCE_DIR}/src/fal"
+        "${CMAKE_CURRENT_SOURCE_DIR}/src/fem"
+        "${CMAKE_CURRENT_SOURCE_DIR}/src/fem/none"
+        "${CMAKE_CURRENT_SOURCE_DIR}/src/fem/simple_gpio"
+        "${CMAKE_CURRENT_SOURCE_DIR}/src/fem/three_pin_gpio"
+        "${CMAKE_CURRENT_SOURCE_DIR}/src/mac_features"
+        "${CMAKE_CURRENT_SOURCE_DIR}/src/mac_features/ack_generator"
+        "${CMAKE_CURRENT_SOURCE_DIR}/src/platform/clock"
+        "${CMAKE_CURRENT_SOURCE_DIR}/src/platform/coex"
+        "${CMAKE_CURRENT_SOURCE_DIR}/src/platform/hp_timer"
+        "${CMAKE_CURRENT_SOURCE_DIR}/src/platform/lp_tomer"
+        "${CMAKE_CURRENT_SOURCE_DIR}/src/platform/random"
+        "${CMAKE_CURRENT_SOURCE_DIR}/src/platform/temperature"
+        "${CMAKE_CURRENT_SOURCE_DIR}/src/rsch"
+        "${CMAKE_CURRENT_SOURCE_DIR}/src/timer_scheduler"
+        #"${CMAKE_CURRENT_SOURCE_DIR}/src/rsch/raal/simulator"
+        "${CMAKE_CURRENT_SOURCE_DIR}/src/rsch/raal/single_phy"
+        #"${CMAKE_CURRENT_SOURCE_DIR}/src/rsch/raal/softdevice"
+        #"${CMAKE_CURRENT_SOURCE_DIR}/components/softdevice/s140/headers/nrf52"
+        #"${CMAKE_CURRENT_SOURCE_DIR}/components/softdevice/s140/headers"
+)
+
+#source
+target_sources(${LIBRARY_NAME} 
+    INTERFACE 
+        src/nrf_802154_core_hooks.c
+        src/nrf_802154_core.c
+        src/nrf_802154_critical_section.c
+        src/nrf_802154_debug.c
+        #src/nrf_802154_notification_direct.c
+        src/nrf_802154_notification_swi.c
+        src/nrf_802154_pib.c
+        #src/nrf_802154_priority_drop_direct.c
+        src/nrf_802154_priority_drop_swi.c
+        src/nrf_802154_request_swi.c
+        src/nrf_802154_rssi.c
+        src/nrf_802154_rx_buffer.c
+        src/nrf_802154_swi.c
+        src/nrf_802154_timer_coord.c
+        src/nrf_802154.c
+        src/fal/nrf_802154_fal.c
+        src/fem/simple_gpio/nrf_fem_simple_gpio.c
+        src/fem/three_pin_gpio/nrf_fem_three_pin_gpio.c
+        #src/mac_features/nrf_802154_ack_timeout.c
+        src/mac_features/nrf_802154_csma_ca.c
+        src/mac_features/nrf_802154_delayed_trx.c
+        src/mac_features/nrf_802154_filter.c
+        src/mac_features/nrf_802154_frame_parser.c
+        src/mac_features/nrf_802154_precise_ack_timeout.c
+        src/mac_features/ack_generator/nrf_802154_ack_data.c
+        src/mac_features/ack_generator/nrf_802154_ack_generator.c
+        src/mac_features/ack_generator/nrf_802154_enh_ack_generator.c
+        src/mac_features/ack_generator/nrf_802154_imm_ack_generator.c
+        #src/platform/clock/nrf_802154_clock_nodrv.c
+        src/platform/clock/nrf_802154_clock_sdk.c
+        src/platform/coex/nrf_802154_wifi_coex_none.c
+        src/platform/hp_timer/nrf_802154_hp_timer.c
+        src/platform/lp_timer/nrf_802154_lp_timer_nodrv.c
+        #src/platform/lp_timer/nrf_802154_lp_timer_none.c
+        #src/platform/random/nrf_802154_random_newlib.c
+        src/platform/random/nrf_802154_random_stdlib.c
+        src/platform/temperature/nrf_802154_temperature_none.c
+        src/rsch/nrf_802154_rsch_crit_sect.c
+        src/rsch/nrf_802154_rsch.c
+        #src/rsch/raal/simulator/nrf_raal_simulator.c
+        src/rsch/raal/single_phy/single_phy.c
+        #src/rsch/raal/softdevice/nrf_raal_softdevice.c
+        src/timer_scheduler/nrf_802154_timer_sched.c
+)
+
+#source/include
+target_sources(${LIBRARY_NAME}
+    INTERFACE 
+        src/nrf_802154.h
+        src/nrf_802154_config.h
+        src/nrf_802154_const.h
+        src/nrf_802154_core.h
+        src/nrf_802154_core_hooks.h
+        src/nrf_802154_critical_section.h
+        src/nrf_802154_debug.h
+        src/nrf_802154_debug_core.h
+        src/nrf_802154_notification.h
+        src/nrf_802154_peripherals.h
+        src/nrf_802154_pib.h
+        src/nrf_802154_priority_drop.h
+        src/nrf_802154_procedures_duration.h
+        src/nrf_802154_request.h
+        src/nrf_802154_rssi.h
+        src/nrf_802154_rx_buffer.h
+        src/nrf_802154_swi.h
+        src/nrf_802154_timer_coord.h
+        src/nrf_802154_types.h
+        src/nrf_802154_utils.h
+        src/fal/nrf_802154_fal.h
+        src/fem/nrf_fem_control_config.h
+        src/fem/nrf_fem_protocol_api.h
+        src/fem/nrf_fem_protocol_legacy_api.h
+        src/fem/none/nrf_fem_config.h
+        src/fem/simple_gpio/nrf_fem_config.h
+        src/fem/three_pin_gpio/nrf_fem_config.h
+        src/mac_features/nrf_802154_ack_timeout.h
+        src/mac_features/nrf_802154_csma_ca.h
+        src/mac_features/nrf_802154_delayed_trx.h
+        src/mac_features/nrf_802154_filter.h
+        src/mac_features/nrf_802154_frame_parser.h
+        src/mac_features/ack_generator/nrf_802154_ack_data.h
+        src/mac_features/ack_generator/nrf_802154_ack_generator.h
+        src/mac_features/ack_generator/nrf_802154_enh_ack_generator.h
+        src/mac_features/ack_generator/nrf_802154_imm_ack_generator.h
+        src/platform/clock/nrf_802154_clock.h
+        src/platform/coex/nrf_802154_wifi_coex.h
+        src/platform/hp_timer/nrf_802154_hp_timer.h
+        src/platform/lp_timer/nrf_802154_lp_timer.h
+        src/platform/random/nrf_802154_random.h
+        src/platform/temperature/nrf_802154_temperature.h
+        src/rsch/nrf_802154_rsch.h
+        src/rsch/nrf_802154_rsch_crit_sect.h
+        src/timer_scheduler/nrf_802154_timer_sched.h
+)
