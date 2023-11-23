@@ -4,9 +4,6 @@
 #include "semphr.h"
 
 namespace ES::Threading {
-
-    bool isInterruptHandling();
-
     class Semaphore {
     public:
 
@@ -68,8 +65,4 @@ namespace ES::Threading {
 			_handle = xSemaphoreCreateBinary();
 		}
 	};
-
-    inline bool isInterruptHandling() {
-        return __get_IPSR() != 0;
-    }
 }

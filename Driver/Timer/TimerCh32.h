@@ -443,7 +443,7 @@ namespace ES::Driver::Timer {
 
     class TimerInputCapture {
     public:
-        TimerInputCapture(TIM_TypeDef* tim, GPIO_TypeDef* port, u16 pin, u16 channel) : _tim(tim), _port(port), _pin(pin), _channel(channel) {
+        TimerInputCapture(TIM_TypeDef* tim, GPIO_TypeDef* port, u16 pin, u16 channel, u32 memadr, u32 memadr2) : _tim(tim), _port(port), _pin(pin), _channel(channel) {
 
             uint32_t timPeriph  = 0;
             if(tim == TIM1) {
@@ -489,6 +489,8 @@ namespace ES::Driver::Timer {
 
             RCC_APB2PeriphClockCmd(rccPeriph, ENABLE);
 
+            RCC_AHBPeriphClockCmd(RCC_AHBPeriph_DMA1, ENABLE);
+
             GPIO_InitTypeDef        GPIO_InitStructure = {0};
             TIM_ICInitTypeDef       TIM_ICInitStructure = {0};
             TIM_TimeBaseInitTypeDef TIM_TimeBaseInitStructure = {0};
@@ -515,7 +517,7 @@ namespace ES::Driver::Timer {
 
             TIM_PWMIConfig(TIM2, &TIM_ICInitStructure);
 
-            NVIC_InitStructure.NVIC_IRQChannel = TIM2_IRQn;
+            NVIC_InitStructure.NVIC_IRQChannel = DMA1_Channel5_IRQn;
             NVIC_InitStructure.NVIC_IRQChannelPreemptionPriority = 2;
             NVIC_InitStructure.NVIC_IRQChannelSubPriority = 0;
             NVIC_InitStructure.NVIC_IRQChannelCmd = ENABLE;
@@ -525,9 +527,51 @@ namespace ES::Driver::Timer {
             TIM_SelectSlaveMode(TIM2, TIM_SlaveMode_Reset);
             TIM_SelectMasterSlaveMode(TIM2, TIM_MasterSlaveMode_Disable);
 
-            TIM_ITConfig(TIM2, TIM_IT_CC1 | TIM_IT_CC2, ENABLE);
+            DMA_InitTypeDef DMA_InitStructure = {0};
+            /*DMA_DeInit(DMA1_Channel7);
+            DMA_InitStructure.DMA_PeripheralBaseAddr = 0x40000038;
+            DMA_InitStructure.DMA_MemoryBaseAddr = memadr;
+            DMA_InitStructure.DMA_DIR = DMA_DIR_PeripheralSRC;
+            DMA_InitStructure.DMA_BufferSize = 16;
+            DMA_InitStructure.DMA_PeripheralInc = DMA_PeripheralInc_Disable;
+            DMA_InitStructure.DMA_MemoryInc = DMA_MemoryInc_Enable;
+            DMA_InitStructure.DMA_PeripheralDataSize = DMA_PeripheralDataSize_HalfWord;
+            DMA_InitStructure.DMA_MemoryDataSize = DMA_MemoryDataSize_HalfWord;
+            DMA_InitStructure.DMA_Mode = DMA_Mode_Circular;
+            DMA_InitStructure.DMA_Priority = DMA_Priority_VeryHigh;
+            DMA_InitStructure.DMA_M2M = DMA_M2M_Disable;
+            DMA_Init(DMA1_Channel7, &DMA_InitStructure);
+
+            DMA_Cmd(DMA1_Channel7, ENABLE);*/
+
+            NVIC_InitStructure.NVIC_IRQChannel = _irq;
+            NVIC_InitStructure.NVIC_IRQChannelPreemptionPriority = 2;
+            NVIC_InitStructure.NVIC_IRQChannelSubPriority = 0;
+            NVIC_InitStructure.NVIC_IRQChannelCmd = ENABLE;
+            NVIC_Init(&NVIC_InitStructure);
+
+            DMA_DeInit(DMA1_Channel5);
+            DMA_InitStructure.DMA_PeripheralBaseAddr = 0x40000034;
+            DMA_InitStructure.DMA_MemoryBaseAddr = memadr2;
+            DMA_InitStructure.DMA_DIR = DMA_DIR_PeripheralSRC;
+            DMA_InitStructure.DMA_BufferSize = 16;
+            DMA_InitStructure.DMA_PeripheralInc = DMA_PeripheralInc_Disable;
+            DMA_InitStructure.DMA_MemoryInc = DMA_MemoryInc_Enable;
+            DMA_InitStructure.DMA_PeripheralDataSize = DMA_PeripheralDataSize_HalfWord;
+            DMA_InitStructure.DMA_MemoryDataSize = DMA_MemoryDataSize_HalfWord;
+            DMA_InitStructure.DMA_Mode = DMA_Mode_Circular;
+            DMA_InitStructure.DMA_Priority = DMA_Priority_VeryHigh;
+            DMA_InitStructure.DMA_M2M = DMA_M2M_Disable;
+            DMA_Init(DMA1_Channel5, &DMA_InitStructure);
+
+            DMA_Cmd(DMA1_Channel5, ENABLE);
+
+            //DMA_ITConfig(DMA1_Channel5, DMA_IT_TC, ENABLE);
+
+            //TIM_DMACmd(TIM2, TIM_DMA_CC1 | TIM_DMA_CC2, ENABLE);
 
             TIM_Cmd(TIM2, ENABLE);
+
         } 
 
         TimerInputCapture() {

@@ -6,7 +6,6 @@
 #include "ch32v20x_rcc.h"
 #include "ch32v20x_gpio.h"
 
-#include "ThreadFreeRtos.h"
 #include "Bldc.h"
 
 namespace ES::Driver::Adc {
@@ -71,6 +70,13 @@ namespace ES::Driver::Adc {
             ADC_StartCalibration(_adc);
             while(ADC_GetCalibrationStatus(_adc));
             _calibrattionValue = Get_CalibrationValue(_adc);
+            NVIC_InitTypeDef NVIC_InitStructure;
+            NVIC_InitStructure.NVIC_IRQChannel = ADC_IRQn;
+            NVIC_InitStructure.NVIC_IRQChannelPreemptionPriority = 1;
+            NVIC_InitStructure.NVIC_IRQChannelSubPriority = 1;
+            NVIC_InitStructure.NVIC_IRQChannelCmd = ENABLE;
+            NVIC_Init(&NVIC_InitStructure);
+
             ADC_Cmd(_adc, DISABLE);
         }
         
@@ -275,6 +281,16 @@ namespace ES::Driver::Adc {
             ADC_StartCalibration(_adc);
             while(ADC_GetCalibrationStatus(_adc));
             _calibrattionValue = Get_CalibrationValue(_adc);
+
+            /*NVIC_InitTypeDef NVIC_InitStructure;
+            NVIC_InitStructure.NVIC_IRQChannel = ADC_IRQn;
+            NVIC_InitStructure.NVIC_IRQChannelPreemptionPriority = 1;
+            NVIC_InitStructure.NVIC_IRQChannelSubPriority = 1;
+            NVIC_InitStructure.NVIC_IRQChannelCmd = ENABLE;
+            NVIC_Init(&NVIC_InitStructure);
+
+            ADC_ITConfig(ADC2, ADC_IT_JEOC, ENABLE);*/
+
             //ADC_Cmd(_adc, DISABLE);
         }
         
@@ -296,11 +312,9 @@ namespace ES::Driver::Adc {
 
         void pollForCOnv() {
             while(!ADC_GetFlagStatus(_adc, ADC_FLAG_EOC)) {
-                ES::Threading::yield();
             }
             ADC_ClearFlag(_adc, ADC_FLAG_EOC);
             while(!ADC_GetFlagStatus(_adc, ADC_FLAG_JEOC)) {
-                ES::Threading::yield();
             }
             ADC_ClearFlag(_adc, ADC_FLAG_JEOC);
         }

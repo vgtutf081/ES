@@ -1,15 +1,14 @@
 #pragma once
 
-#include "IGpio.h"
+#include "GpioCh32v.h"
 #include "TimerCh32.h"
-#include "Semaphore.h"
 #include "Bldc.h"
 
 namespace ES::Driver::MotorControl {
 
     class Drv8328 {
     public:
-        Drv8328(Gpio::IGpio& nSleep, Gpio::IGpio& nFault, Timer::TimerBaseCh32v& timComplimentary, Timer::PwmCh32v& pwmA, Timer::PwmCh32v& pwmB, Timer::PwmCh32v& pwmC) : _nSleep(nSleep), _nFault(nFault), _timComplimentary(timComplimentary), _pwmA(pwmA), _pwmB(pwmB), _pwmC(pwmC) {
+        Drv8328(Gpio::Ch32vPin& nSleep, Gpio::Ch32vPin& nFault, Timer::TimerBaseCh32v& timComplimentary, Timer::PwmCh32v& pwmA, Timer::PwmCh32v& pwmB, Timer::PwmCh32v& pwmC) : _nSleep(nSleep), _nFault(nFault), _timComplimentary(timComplimentary), _pwmA(pwmA), _pwmB(pwmB), _pwmC(pwmC) {
 
             _timComplimentary.bdtrConfig();
             //_timComplimentary.setPeriod(3000);
@@ -121,10 +120,10 @@ namespace ES::Driver::MotorControl {
 
         Timer::PwmCh32v _currentNode;
 
-        Gpio::IGpio& _nFault;
+        Gpio::Ch32vPin& _nFault;
         
         int _freq = 32000;
-        Gpio::IGpio& _nSleep;
+        Gpio::Ch32vPin& _nSleep;
 
     };
 }

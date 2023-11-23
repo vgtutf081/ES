@@ -1,17 +1,12 @@
 #pragma once
 
-#include "ThreadFreeRtos.h"
-#include "FreeRtosQueue.h"
+#include "TimerCh32.h" 
 
 namespace ES::Driver::Telemetry::Dhsot {
 
     static TIM_TypeDef* timMeas = TIM2;
 
     static constexpr uint8_t FrameSize = 16;
-
-    static constexpr uint16_t HighEdgePeriodSet = 1000;
-    static constexpr uint16_t HighEdgePeriodReset = 500;
-    static constexpr uint16_t BitPeriod = 1500;
 
     static constexpr uint16_t ThrottleMask = 0x7FF;
     static constexpr uint16_t TelemetryMask = 11;
@@ -50,12 +45,19 @@ namespace ES::Driver::Telemetry::Dhsot {
 
         void callbackCc2(uint16_t value) {
             if(value > 100) {
+                TIM_DMACmd(TIM2, TIM_DMA_CC1, ENABLE);
                 _frameStartFound = true;
-                _index = 0;
             }
             else if(value != 0){
                 _periodLength = value;
             }
+            if(_frameStartFound && _periodLength != 0) {
+                TIM_ITConfig(TIM2, TIM_IT_CC2, DISABLE);
+            }
+        }
+
+        void callbackDma() {
+            parseBuffer();
         }
 
         bool parseBuffer() {
@@ -63,18 +65,18 @@ namespace ES::Driver::Telemetry::Dhsot {
             uint16_t valueForCrc = 0;
             uint16_t crc = 0;
             for(uint8_t i = 0; i < ThrottleBits; i++) {
-                if(_capturedFrame[i] > (_periodLength / 2)) {
+                if(_fallingEdges[i] > (_periodLength / 2)) {
                     value |=  1 << (ThrottleBits - 1) - i;
                     valueForCrc |= 1 << i;
                 }
             }
             valueForCrc << 1;
-            if(_capturedFrame[TelemetryMask] > (_periodLength / 2)) {
+            if(_fallingEdges[TelemetryMask] > (_periodLength / 2)) {
                 value |=  1 << TelemetryMask;
                 valueForCrc |= 1;
             }
             for(uint8_t i = TelemetryMask + 1; i < FrameSize; i++) {
-                if(_capturedFrame[i] > (_periodLength / 2)) {
+                if(_fallingEdges[i] > (_periodLength / 2)) {
                     //value |=  1 << (FrameSize - 1) - (i - (TelemetryMask + 1));
                     value |=  1 << i;
                 }
@@ -110,20 +112,15 @@ namespace ES::Driver::Telemetry::Dhsot {
 
     private:
 
-        Threading::Thread _DhshotHandle{"Dhsot", 64, Threading::ThreadPriority::Normal,  [this](){
-            while(true) {
-                if(flag) {
-                    parseBuffer();
-                    flag = false;
-                }
-                Threading::yield();
-            }
-        }};
+        uint16_t _fallingEdges[FrameSize* 2];
+        uint16_t _risingEdges[FrameSize* 2];
+        Timer::TimerInputCapture inputCap{timMeas, GPIOA, GPIO_Pin_1, TIM_Channel_2, reinterpret_cast<uint32_t>(_risingEdges), reinterpret_cast<uint32_t>(_fallingEdges)};
 
         uint16_t ccValue = 0;
         bool flag = false;
         bool _frameStartFound = false;
         uint16_t _capturedFrame[FrameSize * 2];
+
         DshotPacket _packet{};
         uint8_t _index = 0;
         uint16_t _periodLength = 0;
