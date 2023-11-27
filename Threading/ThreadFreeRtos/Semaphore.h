@@ -2,6 +2,7 @@
 
 #include "FreeRTOS.h"
 #include "semphr.h"
+#include "ThreadFreeRtos.h"
 
 namespace ES::Threading {
     class Semaphore {

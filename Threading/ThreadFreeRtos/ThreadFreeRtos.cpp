@@ -5,6 +5,16 @@
 
 namespace ES::Threading {
 
+#if defined(NRF)
+    size_t getCurrentInterruptNumber() {
+        return __get_IPSR();
+    }
+
+    bool isInterruptHandling() {
+        return getCurrentInterruptNumber() != 0;
+    }
+#endif
+
     static ID makeThreadId(TaskHandle_t handle) {
         return reinterpret_cast<ID>(handle);
     }

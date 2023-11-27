@@ -38,6 +38,12 @@ namespace ES::Threading {
     void sleepForUs(size_t value);
     #endif
     void yield();
+
+    #if defined(NRF)
+        size_t getCurrentInterruptNumber();
+
+        bool isInterruptHandling();
+    #endif
     
     class Thread {
     public:
