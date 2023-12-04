@@ -2027,6 +2027,7 @@ static void irq_bcmatch_state_rx(void)
         }
         else if (filter_result == NRF_802154_RX_CUSTOM_ARMLET_INTERFACE) {
             nrf_delay_ms(1);
+            mp_current_rx_buffer->free = false;
             received_frame_notify(mp_current_rx_buffer->data);
         }
         else if ((filter_result == NRF_802154_RX_ERROR_INVALID_LENGTH) ||
