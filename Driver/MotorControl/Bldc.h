@@ -1,14 +1,25 @@
 #pragma once
 
+#include "system_ch32v20x.h"
+
 namespace ES::Driver::MotorControl::Bldc {
     
-    enum class Step : uint8_t{
+    /*enum class Step : uint8_t{
         ChAl = 1,
         ChBl,
         AhBl,
         AhCl,
         BhCl,
         BhAl
+    };*/
+
+    enum class Step : uint8_t{
+        AhBl = 1,
+        ChBl,
+        ChAl,
+        BhAl,
+        BhCl,
+        AhCl
     };
 
     enum MotorPhase {
@@ -22,21 +33,11 @@ namespace ES::Driver::MotorControl::Bldc {
         Falling
     };
 
-    enum class LiPoCells : uint8_t {
-        twoS = 2,
-        fourS = 4,
-        sixS = 6
-    };
-
-    static constexpr uint16_t freq16Khz = 144000000 / 16000;
-    static constexpr uint16_t freq32Khz = 144000000 / 32000;
-    static constexpr uint16_t freq48Khz = 144000000 / 48000;
-    static constexpr uint16_t freq64Khz = 144000000 / 64000;
-
-    enum class Torque : uint16_t {
-        High = freq16Khz, 
-        Medium = freq32Khz, 
-        Low = freq48Khz, 
-        VeryLow = freq64Khz
+    enum class TorqueDivider : uint16_t {
+        VeryHigh = 16000, 
+        High = 24000, 
+        Medium = 32000, 
+        Low = 48000, 
+        VeryLow = 64000
     };
 }

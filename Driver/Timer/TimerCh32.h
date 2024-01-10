@@ -21,9 +21,15 @@ namespace ES::Driver::Timer {
             RCC_GetClocksFreq(&rcc);
             if(_tim == TIM1) {
                 _timBaseFreq = rcc.PCLK2_Frequency;
+                if(rcc.PCLK2_Frequency != rcc.HCLK_Frequency) {
+                    _timBaseFreq = _timBaseFreq * 2;
+                }
             }
             else {
                 _timBaseFreq = rcc.PCLK1_Frequency;
+                if(rcc.PCLK1_Frequency != rcc.HCLK_Frequency) {
+                    _timBaseFreq = _timBaseFreq * 2;
+                }
             }
             if(_div == TIM_CKD_DIV2) {
                 _timBaseFreq /= 2;
@@ -58,47 +64,35 @@ namespace ES::Driver::Timer {
             }
 
             TIM_TimeBaseStructInit(&TIMER_InitStructure);
+            TIMER_InitStructure.TIM_ClockDivision = _div;
             TIMER_InitStructure.TIM_CounterMode = TIM_CounterMode_Up;
             TIMER_InitStructure.TIM_Prescaler = psc - 1;
             TIMER_InitStructure.TIM_Period = arr;
-            if(_tim == TIM1) {
-                TIMER_InitStructure.TIM_RepetitionCounter = 1; //TODO asd
-            }
-            else {
-                TIMER_InitStructure.TIM_RepetitionCounter = 0; //TODO asd
-            }
 
             TIM_TimeBaseInit(_tim, &TIMER_InitStructure);
-            stop();
-            TIM_SetCounter(_tim, 0);
+            TIM_ARRPreloadConfig( _tim, ENABLE );
+            TIM_Cmd( TIM1, ENABLE );
         } 
 
         TimerBaseCh32v() {
-            
         }
 
-        void setIrq(uint8_t priority, uint16_t event = TIM_IT_Update) {
-            TIM_ClearITPendingBit(_tim, event);
-            _irqEvent = event;
-            if(event == TIM_IT_Update) {
-                NVIC_InitTypeDef NVIC_InitStructure;
-                NVIC_InitStructure.NVIC_IRQChannel = _irq;
-                NVIC_InitStructure.NVIC_IRQChannelPreemptionPriority = priority;
-                NVIC_InitStructure.NVIC_IRQChannelSubPriority = 1;
-                NVIC_InitStructure.NVIC_IRQChannelCmd = ENABLE;
-                NVIC_Init(&NVIC_InitStructure);
-                TIM_ITConfig(_tim, event, ENABLE);
-            }
-            /*else if(event == TIM_IT_CC4) {
+        void setIrq(uint8_t priority = 0) {
+            NVIC_SetPriority(_irq, priority);
+            NVIC_EnableIRQ(_irq);
+        }
 
-                TIM_ITConfig(_tim, event, ENABLE);
-                NVIC_InitTypeDef NVIC_InitStructure;
-                NVIC_InitStructure.NVIC_IRQChannel = TIM1_CC_IRQn;
-                NVIC_InitStructure.NVIC_IRQChannelPreemptionPriority = priority;
-                NVIC_InitStructure.NVIC_IRQChannelSubPriority = 0;
-                NVIC_InitStructure.NVIC_IRQChannelCmd = ENABLE;
-                NVIC_Init(&NVIC_InitStructure);
-            }*/
+        void disableIrq() {
+            TIM_ITConfig(_tim, _event, DISABLE);
+        }
+
+        void enableIrq(uint16_t event = TIM_IT_Update) {
+            _event = event;
+            TIM_ITConfig(_tim, _event, ENABLE);
+        }
+
+        void clearIrq() {
+            TIM_ClearITPendingBit(_tim, _event);
         }
 
         bool setFreq(u32 freqHz) {
@@ -133,13 +127,13 @@ namespace ES::Driver::Timer {
 
         void bdtrConfig(uint16_t deadTime = 0) {
             TIM_BDTRInitTypeDef     TIM_BDTRInitStructure = {0};
-            TIM_BDTRInitStructure.TIM_OSSRState = TIM_OSSRState_Enable;
-            TIM_BDTRInitStructure.TIM_OSSIState = TIM_OSSIState_Enable;
+            TIM_BDTRInitStructure.TIM_OSSRState = TIM_OSSRState_Disable;
+            TIM_BDTRInitStructure.TIM_OSSIState = TIM_OSSIState_Disable;
             TIM_BDTRInitStructure.TIM_LOCKLevel = TIM_LOCKLevel_OFF;
             TIM_BDTRInitStructure.TIM_DeadTime = deadTime;
             TIM_BDTRInitStructure.TIM_Break = TIM_Break_Disable;
             TIM_BDTRInitStructure.TIM_BreakPolarity = TIM_BreakPolarity_High;
-            TIM_BDTRInitStructure.TIM_AutomaticOutput = TIM_AutomaticOutput_Enable;
+            TIM_BDTRInitStructure.TIM_AutomaticOutput = TIM_AutomaticOutput_Disable;
             TIM_BDTRConfig(_tim, &TIM_BDTRInitStructure);
         }
 
@@ -160,7 +154,26 @@ namespace ES::Driver::Timer {
                 TIM_OC4Init(_tim, &TIM_OCInitStructure);
                 TIM_OC4PreloadConfig(_tim, TIM_OCPreload_Disable);
                 TIM_SelectOutputTrigger(_tim, trigger);
+                NVIC_InitTypeDef NVIC_InitStructure;
+                NVIC_InitStructure.NVIC_IRQChannel = TIM1_CC_IRQn;
+                NVIC_InitStructure.NVIC_IRQChannelPreemptionPriority = 0;
+                NVIC_InitStructure.NVIC_IRQChannelSubPriority = 0;
+                NVIC_InitStructure.NVIC_IRQChannelCmd = ENABLE;
+                NVIC_Init(&NVIC_InitStructure);
+                TIM_ITConfig(_tim, TIM_IT_CC4, ENABLE);
             }
+        }
+
+        void configCC4() {
+            TIM_OCInitTypeDef TIM_OCInitStructure={0};
+            TIM_OC4PreloadConfig(_tim, TIM_OCPreload_Enable);
+            TIM_OCInitStructure.TIM_OutputState  = TIM_OutputState_Disable;
+            TIM_OCInitStructure.TIM_OutputNState = TIM_OutputNState_Disable;
+            TIM_OC4Init( _tim, &TIM_OCInitStructure );
+            TIM_OC4FastConfig(_tim,TIM_OCFast_Disable);
+
+            TIM_CCxCmd(_tim, TIM_Channel_4, TIM_CCx_Enable);
+            _tim->CH4CVR = 100;    
         }
 
         void triggerEn() {
@@ -171,6 +184,8 @@ namespace ES::Driver::Timer {
         }
 
         void setPeriod(uint16_t period) {
+            stop();
+            setCounter(0);
             if(period > 0xFFFF) {
                 _arr = 0xFFFF;
             }
@@ -178,6 +193,7 @@ namespace ES::Driver::Timer {
                 _arr = period;
             }
             _tim->ATRLR = _arr;
+            start();
         }
 
         void setCounter(uint16_t counter) {
@@ -201,6 +217,14 @@ namespace ES::Driver::Timer {
             TIM_Cmd(_tim, DISABLE);
         }
 
+        void enableCtrlPwmOutputs() {
+            TIM_CtrlPWMOutputs(_tim, ENABLE);
+        }
+
+        void generateUpdateEvent() {
+            TIM_GenerateEvent(_tim, TIM_EventSource_Update);
+        }
+
         TIM_TypeDef* getTimPointer() {
             return _tim;
         }
@@ -221,8 +245,13 @@ namespace ES::Driver::Timer {
             return _tim->ATRLR;
         }
 
+        uint32_t getTimBaseFreq() {
+            return _timBaseFreq;
+        }
+
     private:
 
+        uint16_t _event;
         u32 _timBaseFreq;
         u16 _div;
         u16 _psc;
@@ -266,25 +295,29 @@ namespace ES::Driver::Timer {
             GPIO_Init(port, &GPIO_InitStructure);
 
             TIM_OCInitStructure.TIM_OCMode = TIM_OCMode_PWM1;
-            TIM_OCInitStructure.TIM_OutputState = TIM_OutputState_Enable;
+            TIM_OCInitStructure.TIM_OutputState = TIM_OutputState_Disable;
             TIM_OCInitStructure.TIM_Pulse = 0;
             TIM_OCInitStructure.TIM_OCPolarity = TIM_OCPolarity_High;
             TIM_OCInitStructure.TIM_OCIdleState = TIM_OCIdleState_Reset;
             if(_channel == 1) {
                 TIM_OC1Init(_tim, &TIM_OCInitStructure);
-                TIM_OC1PreloadConfig(_tim, TIM_OCPreload_Disable);
+                TIM_OC1PreloadConfig(_tim, TIM_OCPreload_Enable);
+                TIM_OC1FastConfig(TIM1,TIM_OCFast_Disable);
             }
             if(_channel == 2) {
                 TIM_OC2Init(_tim, &TIM_OCInitStructure);
-                TIM_OC2PreloadConfig(_tim, TIM_OCPreload_Disable);
+                TIM_OC2PreloadConfig(_tim, TIM_OCPreload_Enable);
+                TIM_OC2FastConfig(TIM1,TIM_OCFast_Disable);
             }
             if(_channel == 3) {
                 TIM_OC3Init(_tim, &TIM_OCInitStructure);
-                TIM_OC3PreloadConfig(_tim, TIM_OCPreload_Disable);
+                TIM_OC3PreloadConfig(_tim, TIM_OCPreload_Enable);
+                TIM_OC3FastConfig(TIM1,TIM_OCFast_Disable);
             }
             if(_channel == 4) {
                 TIM_OC4Init(_tim, &TIM_OCInitStructure);
-                TIM_OC4PreloadConfig(_tim, TIM_OCPreload_Disable);
+                TIM_OC4PreloadConfig(_tim, TIM_OCPreload_Enable);
+                TIM_OC4FastConfig(TIM1,TIM_OCFast_Disable);
             }
             TIM_CtrlPWMOutputs(_tim, ENABLE);
         }
@@ -323,55 +356,60 @@ namespace ES::Driver::Timer {
             TIM_OCInitTypeDef TIM_OCInitStructure={0};
             TIM_OCInitStructure.TIM_OCMode = TIM_OCMode_PWM1;
             TIM_OCInitStructure.TIM_OutputState = TIM_OutputState_Disable;
-            TIM_OCInitStructure.TIM_Pulse = 0;
             TIM_OCInitStructure.TIM_OCPolarity = TIM_OCPolarity_High;
             TIM_OCInitStructure.TIM_OCIdleState = TIM_OCIdleState_Reset;
             TIM_OCInitStructure.TIM_OutputNState = TIM_OutputNState_Disable;
-            TIM_OCInitStructure.TIM_OCNPolarity = TIM_OCPolarity_High;
+            TIM_OCInitStructure.TIM_OCNPolarity = TIM_OCNPolarity_High;
             TIM_OCInitStructure.TIM_OCNIdleState = TIM_OCNIdleState_Reset;
 
             if(_channel == 1) {
                 TIM_OC1Init(_tim, &TIM_OCInitStructure);
-                TIM_OC1PreloadConfig(_tim, TIM_OCPreload_Disable);
+                TIM_OC1FastConfig(TIM1,TIM_OCFast_Disable);
+                TIM_OC1PreloadConfig(_tim, TIM_OCPreload_Enable);
             }
             else if(_channel == 2) {
                 TIM_OC2Init(_tim, &TIM_OCInitStructure);
-                TIM_OC2PreloadConfig(_tim, TIM_OCPreload_Disable);
+                TIM_OC2FastConfig(TIM1,TIM_OCFast_Disable);
+                TIM_OC2PreloadConfig(_tim, TIM_OCPreload_Enable);
             }
             else if(_channel == 3) {
                 TIM_OC3Init(_tim, &TIM_OCInitStructure);
-                TIM_OC3PreloadConfig(_tim, TIM_OCPreload_Disable);
+                TIM_OC3FastConfig(TIM1,TIM_OCFast_Disable);
+                TIM_OC3PreloadConfig(_tim, TIM_OCPreload_Enable);
             }
         }
 
         bool setParams(float duty) {
+            _ccp = static_cast<uint16_t>(duty * _tim->ATRLR);
+
             if(_channel == 1) {
-                _tim->CH1CVR = static_cast<uint16_t>(duty * _tim->ATRLR);
+                _tim->CH1CVR = _ccp;
             }
             else if(_channel == 2) {
-                _tim->CH2CVR = static_cast<uint16_t>(duty * _tim->ATRLR);
+                _tim->CH2CVR = _ccp;
             }
             else if(_channel == 3) {
-                _tim->CH3CVR = static_cast<uint16_t>(duty * _tim->ATRLR);
+                _tim->CH3CVR = _ccp;
             }
             else if(_channel == 4) {
-                _tim->CH4CVR = static_cast<uint16_t>(duty * _tim->ATRLR);
+                _tim->CH4CVR = _ccp;
             }
             return true;
         }
 
         bool setCompare(uint16_t value) {
+            _ccp = value;
             if(_channel == 1) {
-                _tim->CH1CVR = value;
+                _tim->CH1CVR = _ccp;
             }
             else if(_channel == 2) {
-                _tim->CH2CVR = value;
+                _tim->CH2CVR = _ccp;
             }
             else if(_channel == 3) {
-                _tim->CH3CVR = value;
+                _tim->CH3CVR = _ccp;
             }
             else if(_channel == 4) {
-                _tim->CH4CVR = value;
+                _tim->CH4CVR = _ccp;
             }
             return true;
         }
@@ -379,12 +417,15 @@ namespace ES::Driver::Timer {
         void start() {
             if(_channel == 1) {
                 _tim->CCER |= TIM_CC1E;
+                //_tim->CCER |= TIM_CC1NE;
             }
             else if(_channel == 2) {
                 _tim->CCER |= TIM_CC2E;
+                //_tim->CCER |= TIM_CC3NE;
             }
             else if(_channel == 3) {
                 _tim->CCER |= TIM_CC3E;
+                //_tim->CCER |= TIM_CC3NE;
             }
             else if(_channel == 4) {
                 _tim->CCER |= TIM_CC4E;
@@ -394,12 +435,15 @@ namespace ES::Driver::Timer {
         void stop() {
             if(_channel == 1) {
                 _tim->CCER &= ~TIM_CC1E;
+                //_tim->CCER &= ~TIM_CC1NE;
             }
             else if(_channel == 2) {
                 _tim->CCER &= ~TIM_CC2E;
+                //_tim->CCER &= ~TIM_CC2NE;
             }
             else if(_channel == 3) {
                 _tim->CCER &= ~TIM_CC3E;
+                //_tim->CCER &= ~TIM_CC3NE;
             }
             else if(_channel == 4) {
                 _tim->CCER &= ~TIM_CC4E;
@@ -408,26 +452,39 @@ namespace ES::Driver::Timer {
 
         void startComplimentary() {
             if(_channel == 1) {
+                //_tim->CH1CVR = 0xFFFF;
                 _tim->CCER |= TIM_CC1NE;
+
             }
             else if(_channel == 2) {
+                //_tim->CH2CVR = 0xFFFF;
                 _tim->CCER |= TIM_CC2NE;
+
             }
             else if(_channel == 3) {
+                //_tim->CH3CVR = 0xFFFF;
                 _tim->CCER |= TIM_CC3NE;
+
             }
         }
 
         void stopComplimentary() {
             if(_channel == 1) {
+                _tim->CH1CVR = _ccp;
                 _tim->CCER &= ~TIM_CC1NE;
+
             }
             else if(_channel == 2) {
+                _tim->CH2CVR = _ccp;
                 _tim->CCER &= ~TIM_CC2NE;
+
             }
             else if(_channel == 3) {
+                _tim->CH3CVR = _ccp;
                 _tim->CCER &= ~TIM_CC3NE;
+
             }
+
         }
         
     private:
@@ -443,7 +500,7 @@ namespace ES::Driver::Timer {
 
     class TimerInputCapture {
     public:
-        TimerInputCapture(TIM_TypeDef* tim, GPIO_TypeDef* port, u16 pin, u16 channel, u32 memadr, u32 memadr2) : _tim(tim), _port(port), _pin(pin), _channel(channel) {
+        TimerInputCapture(TIM_TypeDef* tim, GPIO_TypeDef* port, u16 pin, u16 channel, u32 memadr) : _tim(tim), _port(port), _pin(pin), _channel(channel) {
 
             uint32_t timPeriph  = 0;
             if(tim == TIM1) {
@@ -502,7 +559,7 @@ namespace ES::Driver::Timer {
             GPIO_ResetBits(port, pin);
 
             TIM_TimeBaseInitStructure.TIM_Period = 0xFFFF;
-            TIM_TimeBaseInitStructure.TIM_Prescaler = 14 - 1;
+            TIM_TimeBaseInitStructure.TIM_Prescaler = 0;
             TIM_TimeBaseInitStructure.TIM_ClockDivision = TIM_CKD_DIV1;
             TIM_TimeBaseInitStructure.TIM_CounterMode = TIM_CounterMode_Up;
 
@@ -517,13 +574,12 @@ namespace ES::Driver::Timer {
 
             TIM_PWMIConfig(TIM2, &TIM_ICInitStructure);
 
-            NVIC_InitStructure.NVIC_IRQChannel = DMA1_Channel5_IRQn;
-            NVIC_InitStructure.NVIC_IRQChannelPreemptionPriority = 2;
-            NVIC_InitStructure.NVIC_IRQChannelSubPriority = 0;
+            NVIC_InitStructure.NVIC_IRQChannel = DMA1_Channel7_IRQn;
+            NVIC_InitStructure.NVIC_IRQChannelPreemptionPriority = 0x20;
             NVIC_InitStructure.NVIC_IRQChannelCmd = ENABLE;
             NVIC_Init(&NVIC_InitStructure);
 
-            TIM_SelectInputTrigger(TIM2, TIM_TS_TI2FP2);
+            TIM_SelectInputTrigger(TIM2, TIM_TS_TI1FP1);
             TIM_SelectSlaveMode(TIM2, TIM_SlaveMode_Reset);
             TIM_SelectMasterSlaveMode(TIM2, TIM_MasterSlaveMode_Disable);
 
@@ -545,14 +601,14 @@ namespace ES::Driver::Timer {
             DMA_Cmd(DMA1_Channel7, ENABLE);*/
 
             NVIC_InitStructure.NVIC_IRQChannel = _irq;
-            NVIC_InitStructure.NVIC_IRQChannelPreemptionPriority = 2;
+            NVIC_InitStructure.NVIC_IRQChannelPreemptionPriority = 3;
             NVIC_InitStructure.NVIC_IRQChannelSubPriority = 0;
             NVIC_InitStructure.NVIC_IRQChannelCmd = ENABLE;
             NVIC_Init(&NVIC_InitStructure);
 
-            DMA_DeInit(DMA1_Channel5);
-            DMA_InitStructure.DMA_PeripheralBaseAddr = 0x40000034;
-            DMA_InitStructure.DMA_MemoryBaseAddr = memadr2;
+            DMA_DeInit(DMA1_Channel7);
+            DMA_InitStructure.DMA_PeripheralBaseAddr = 0x40000038;
+            DMA_InitStructure.DMA_MemoryBaseAddr = memadr;
             DMA_InitStructure.DMA_DIR = DMA_DIR_PeripheralSRC;
             DMA_InitStructure.DMA_BufferSize = 16;
             DMA_InitStructure.DMA_PeripheralInc = DMA_PeripheralInc_Disable;
@@ -562,17 +618,24 @@ namespace ES::Driver::Timer {
             DMA_InitStructure.DMA_Mode = DMA_Mode_Circular;
             DMA_InitStructure.DMA_Priority = DMA_Priority_VeryHigh;
             DMA_InitStructure.DMA_M2M = DMA_M2M_Disable;
-            DMA_Init(DMA1_Channel5, &DMA_InitStructure);
+            DMA_Init(DMA1_Channel7, &DMA_InitStructure);
 
-            DMA_Cmd(DMA1_Channel5, ENABLE);
+            DMA_Cmd(DMA1_Channel7, ENABLE);
 
             //DMA_ITConfig(DMA1_Channel5, DMA_IT_TC, ENABLE);
 
             //TIM_DMACmd(TIM2, TIM_DMA_CC1 | TIM_DMA_CC2, ENABLE);
 
-            TIM_Cmd(TIM2, ENABLE);
-
+            //TIM_Cmd(TIM2, ENABLE);
         } 
+
+        void start() {
+            TIM_Cmd(TIM2, ENABLE);
+        }
+
+        void stop() {
+            TIM_Cmd(TIM2, DISABLE);
+        }
 
         TimerInputCapture() {
             

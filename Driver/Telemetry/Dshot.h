@@ -1,10 +1,12 @@
 #pragma once
 
 #include "TimerCh32.h" 
+#include <functional>
+#include "delayCustom.h"
 
-namespace ES::Driver::Telemetry::Dhsot {
+namespace ES::Driver::Telemetry::Dshot {
 
-    static TIM_TypeDef* timMeas = TIM2;
+    static TIM_TypeDef* timDshot = TIM2;
 
     static constexpr uint8_t FrameSize = 16;
 
@@ -29,31 +31,27 @@ namespace ES::Driver::Telemetry::Dhsot {
     class DshotListner {
     public:
 
-        DshotListner();
+        DshotListner(const std::function<void(uint16_t throttle)>& handler);
 
         void callbackCc1(uint16_t value) {
-            if(_frameStartFound) {
-                _capturedFrame[_index] = value;
-                _index++;
-                if(_index >= FrameSize) {
-                    _index = 0;
-                    flag = true;
-                    _frameStartFound = false;
+            if(value < 180 && value > 0) {
+                _periodLength = value;
+            }
+            if(_periodLength != 0) {
+                if(value > 200) {
+                    Delay::delayUs(70);
+                    TIM_DMACmd(TIM2, TIM_DMA_CC2, ENABLE);
+                    TIM_ITConfig(TIM2, TIM_IT_CC1, DISABLE);
                 }
             }
         }
 
-        void callbackCc2(uint16_t value) {
-            if(value > 100) {
-                TIM_DMACmd(TIM2, TIM_DMA_CC1, ENABLE);
-                _frameStartFound = true;
-            }
-            else if(value != 0){
-                _periodLength = value;
-            }
-            if(_frameStartFound && _periodLength != 0) {
-                TIM_ITConfig(TIM2, TIM_IT_CC2, DISABLE);
-            }
+        void enable() {
+            _inputCap.start();
+        }
+
+        void disable() {
+            _inputCap.stop();
         }
 
         void callbackDma() {
@@ -86,7 +84,13 @@ namespace ES::Driver::Telemetry::Dhsot {
             if(crc == _packet.crc) {
                 _packet.throttle = value & ThrottleMask;
                 _packet.requestTelemetry = value & TelemetryMask;
+                _packetRecievedHandler(_packet.throttle);
                 return true;
+            }
+            else {
+                _periodLength = 0;
+                TIM_DMACmd(TIM2, TIM_DMA_CC2, DISABLE);
+                TIM_ITConfig(TIM2, TIM_IT_CC1, ENABLE);
             }
             return false;
         }
@@ -96,33 +100,18 @@ namespace ES::Driver::Telemetry::Dhsot {
             return (value ^ (value >> 4) ^ (value >> 8)) & 0x0F;
         }
 
-        CommandType getThrottle(uint16_t& value) {
-            value = _packet.throttle;
-            if(value == 0) {
-                return CommandType::Throttle;
-            }
-            else if(_packet.throttle < 48) {
-                return CommandType::Command;
-            } 
-            else {
-                return CommandType::Throttle;
-            }
-
-        }
-
     private:
 
         uint16_t _fallingEdges[FrameSize* 2];
         uint16_t _risingEdges[FrameSize* 2];
-        Timer::TimerInputCapture inputCap{timMeas, GPIOA, GPIO_Pin_1, TIM_Channel_2, reinterpret_cast<uint32_t>(_risingEdges), reinterpret_cast<uint32_t>(_fallingEdges)};
+        Timer::TimerInputCapture _inputCap{timDshot, GPIOA, GPIO_Pin_0, TIM_Channel_1, reinterpret_cast<uint32_t>(_fallingEdges)};
 
         uint16_t ccValue = 0;
-        bool flag = false;
         bool _frameStartFound = false;
         uint16_t _capturedFrame[FrameSize * 2];
+        std::function<void(uint16_t throttle)> _packetRecievedHandler{};
 
         DshotPacket _packet{};
-        uint8_t _index = 0;
         uint16_t _periodLength = 0;
     };
 }

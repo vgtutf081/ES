@@ -20,32 +20,25 @@ extern "C" {
         }
     }
 
-    void TIM4_IRQHandler(void) __attribute__((interrupt("WCH-Interrupt-fast")));
-    void TIM4_IRQHandler(void) {
-        if (TIM_GetITStatus(TIM4, TIM_IT_Update) != RESET)
+    void TIM1_CC_IRQHandler(void) __attribute__((interrupt("WCH-Interrupt-fast")));
+    void TIM1_CC_IRQHandler(void) {
+        if (TIM_GetITStatus(TIM1, TIM_IT_CC4) != RESET)
         {   
-            TIM_ClearITPendingBit(TIM4, TIM_IT_Update);
-            escPtr->intTim4Callback();
+            TIM_ClearITPendingBit(TIM1, TIM_IT_CC4);
+            //escPtr->intTim1CC4Callback();
         }
     }
 
-    void TIM3_IRQHandler(void) __attribute__((interrupt("WCH-Interrupt-fast")));
-    void TIM3_IRQHandler(void) {
-        if (TIM_GetITStatus(TIM3, TIM_IT_Update) != RESET)
-        {   
-            TIM_ClearITPendingBit(TIM3, TIM_IT_Update);
-            escPtr->intTim3Callback();
-        }
-    }
 
-    void ADC1_2_IRQHandler(void) __attribute__((interrupt("WCH-Interrupt-fast")));
+
+    /*void ADC1_2_IRQHandler(void) __attribute__((interrupt("WCH-Interrupt-fast")));
     void ADC1_2_IRQHandler(void) {
         if (ADC_GetITStatus(ADC1, ADC_IT_JEOC) != RESET)
         {   
             ADC_ClearITPendingBit(ADC1, ADC_IT_JEOC);
             escPtr->intAdcCallback();
         }
-    }
+    }*/
 }
 
 #endif

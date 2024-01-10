@@ -1,10 +1,12 @@
 #pragma once
 
-#include "DRV8328.h"
-#include "AdcCh32v.h"
+#include "HalfBridgeDriver.h"
 #include "TimerCh32.h"
-
 #include "GpioCh32v.h"
+#include "Dshot.h"
+#include "Comparator.h"
+
+#include "delayCustom.h"
 
 #include <cmath>
 
@@ -12,216 +14,172 @@
 
 namespace ES::Driver::MotorControl {
 
-    //static constexpr uint32_t SupplyVoltage = 12000;
-    //static constexpr uint32_t HighResistor = 10000;
-    //static constexpr uint32_t LowResistor = 2200;
+    static constexpr float MinThrottle = 0.03f;
+    static constexpr float MaxThrottle = 1.f;
+    static constexpr float MinStartupThrottle = 0.03f;
+    static constexpr uint16_t DefaultPrescaler = 1;
 
-    //static constexpr uint8_t CommutationFullCircle = 42;
-    //static constexpr uint32_t MinuteUs = 60'000'000;
-
-    static  constexpr uint8_t ProcessingDelay = 10;
-
-    static TIM_TypeDef* timMeas = TIM4;
-    static TIM_TypeDef* timComm = TIM3;
-    static constexpr uint32_t TimerFreqMhz = 144;
-    static constexpr uint32_t Factor = 8;
-    static constexpr uint32_t TimerDiv = TimerFreqMhz / Factor;
-
-    static constexpr uint16_t Torque = static_cast<uint16_t>(Bldc::Torque::VeryLow);
-
-#if defined(BR2205)
-    static constexpr float MinThrottle = 0.2f;
-    static constexpr float MaxThrottle = 0.8f;
-    static constexpr float OpenThrottle = 0.4f;
-
-#elif defined(BROTHER_HOBBY)
-    static constexpr float MinThrottle = 0.3f;
-    static constexpr float MaxThrottle = 0.7f;
-    static constexpr float OpenLoopThrottle = 0.5f;
-#else
-#error
-#endif
-    static constexpr uint32_t AdcStop = 200;
-    static constexpr uint32_t AdcStart = 700;
-    static constexpr uint16_t MinimumThrottle = (Torque * MinThrottle);
-    static constexpr uint16_t OpenLoopThrottle = (Torque * OpenThrottle);
-    static constexpr uint16_t MaximumThrottle = (Torque * MaxThrottle);
-    static constexpr uint32_t Period = MaximumThrottle - MinimumThrottle;
-    static constexpr uint16_t AdcMax = 4000;
-
-    static constexpr uint16_t minimalChangeDuty = 3;
-
-    static constexpr float DshotThrottleMaxValue = 2047.0f;
-
-    //static constexpr float HalfSupplyVal = ((SupplyVoltage / 2) * LowResistor) / (HighResistor + LowResistor);
-    //static constexpr uint16_t HalfSupplyAdcVal = static_cast<uint16_t>((4095.0f / 3300.0f) * HalfSupplyVal);
-
-    //static constexpr float k = static_cast<float>(HighResistor + LowResistor) / LowResistor;
-#if defined(BR2205)
-    static constexpr uint32_t OpenLoopEndPeriod = 80;
-    static constexpr uint32_t OpenLoopStartPeriod = 1000;
-    static constexpr float OpenLoopAcceleration = 1.7f;
-#elif defined(BROTHER_HOBBY)
-    static constexpr uint32_t OpenLoopEndPeriod = 1000;
-    static constexpr uint32_t OpenLoopStartPeriod = 20000;
-    static constexpr float OpenLoopAcceleration = 1.1f;
-#else
-#error
-#endif
+    enum Tune {
+        Startup,
+        Input
+    };
 
     class Esc6Step {
     public:
         enum MotorState {
             Idle,
             OpenLoop,
-            Started
+            Started,
+            Failed,
+            PreStart
         };
 
-        Esc6Step(Drv8328 drv, Adc::AdcCh32vThreePhaseInj& adc, uint32_t inputVoltage) :
-        _drv(drv), _adc(adc) {
+        enum class AngleAdvantage : uint16_t {
+            Degree0 = 1,
+            Degree15 = 2,
+            Degree30 = 0xFFFF
+        };
+
+        Esc6Step(uint16_t period) : _period(period) { 
+            _minimumDuty = (period * MinThrottle);
+            _maximumDuty = (period * MaxThrottle);
+            _minStartupDuty = (period * MinStartupThrottle);
             getInstance();
-            updateInputVoltage(inputVoltage);
-            _drv.setTorque(Torque);
-            _drv.init();
-            _drv.startPwm();
-            ADC_ITConfig(ADC1, ADC_IT_JEOC, ENABLE);
+            //_drv.startPwm();
         }
 
-        void parseCallback(uint8_t throttle) {
+        constexpr uint16_t getMinDuty() const {
+            return _minimumDuty;
+        }
+
+        constexpr uint16_t getMinStartupDuty() const {
+            return _minStartupDuty;
+        }
+
+        constexpr uint16_t getMaxDuty() const {
+            return _maximumDuty;
+        }
+
+        constexpr uint16_t getDuty() const {
+            return _actualDuty;
+        }
+
+        void setFrequency(uint32_t value) {
+            uint32_t freq = _drv.getTimeBaseFreq();
+            _drv.setPeriod(freq / value);
             asm("nop");
         }
 
-        void motorStart() {
-            _currentThrottle = OpenLoopThrottle;
-            _drv.setCompare(_currentThrottle);
-            openLoopStart();
+        void setDuty(uint16_t value) {
+            _drv.setDuty(value);
         }
 
-        void setThrottle(float value) {
-            if(_state == MotorControl::Esc6Step::MotorState::Idle) {
-                _drv.setDuty(value);
-            }
-            else {
-                _drv.setDuty(value);
-            }
+        void dropPhases() {
+            _drv.deCommutate(Bldc::MotorPhase::A);
+            _drv.deCommutate(Bldc::MotorPhase::B);
+            _drv.deCommutate(Bldc::MotorPhase::C);
         }
 
-        void setThrottleByPot(uint16_t potValue) {
-            if(potValue < AdcStop) {
-                return;
-            }
-            if(_state == MotorControl::Esc6Step::MotorState::Started) {
-                uint32_t tmp = potValue * Period / (AdcMax - AdcStart);
-                _drv.setCompare(static_cast<uint16_t>(tmp) + MinimumThrottle);
-            }
+        void prepareStartup() {
+            setDuty(_minStartupDuty);
         }
 
-        void setThrottleByDshot(uint16_t value) {
-            if(value == 0) {
-                //_currentThrottle = 0;
-                _targetThrottle = 0;
-                //motorStop();
-                //Delay_Ms(1000);
-            }
-            else {
-                float tmp = static_cast<float>(value) * (static_cast<float>(Period) / DshotThrottleMaxValue);
-                _targetThrottle = static_cast<uint16_t>(tmp) + MinimumThrottle;
-            }
-            if(_targetThrottle > _currentThrottle) {
-                if(_state == MotorState::Idle) {
-                    motorStart();
-                }
-            }
-            if(_currentThrottle == 0) {
-                motorStop();
-                Delay_Ms(500);
-            }
-            //calcNewThrottle();
+        constexpr uint16_t getDeadTime() const {
+            return _drv.getDeadTime();
         }
 
-        void calcNewThrottle() {
-            uint16_t diff = 0;
-            if(_targetThrottle > _currentThrottle) {
-                if(_state == MotorState::Started) {
-                    diff = _targetThrottle - _currentThrottle;
-                    if(diff < minimalChangeDuty) {
-                        _currentThrottle = _targetThrottle;
-                    }
-                    else {
-                        _currentThrottle += minimalChangeDuty;
-                    }
-                    //_drv.setCompare(_currentThrottle);
-                }
+        void playTune(Tune tune) {
+            if(tune == Tune::Startup) {
+                __disable_irq();
+                _drv.setPeriod(2000);
+                //IWDG_ReloadCounter();
+                setDuty(_volume);
+                switchPhase(Bldc::Step::ChAl);
+                _drv.setPrescaler(80);
+                Delay::delayMs(200);
+                switchPhase(Bldc::Step::BhCl);
+                _drv.setPrescaler(60);
+                Delay::delayMs(200);
+                switchPhase(Bldc::Step::AhCl);
+                _drv.setPrescaler(20);
+                Delay::delayMs(200);
+                dropPhases();
+                _drv.setPrescaler(DefaultPrescaler);
+                __enable_irq();
+
             }
-            else if(_targetThrottle < _currentThrottle) {
-                if(_state != MotorState::Idle) {
-                    if(_state == MotorState::Started) { 
-                        diff = _currentThrottle - _targetThrottle;
-                        if(diff < minimalChangeDuty) {
-                            _currentThrottle = _targetThrottle;
-                        }
-                        else {
-                            _currentThrottle -= minimalChangeDuty;
-                        }
-                    //_drv.setCompare(_currentThrottle);
-                    }
-                }
+
+            if(tune == Tune::Input) {
+                __disable_irq();
+                _drv.setPeriod(2000);
+                //IWDG_ReloadCounter();
+                Delay::delayMs(100);
+                switchPhase(Bldc::Step::ChAl);
+                _drv.setPrescaler(40);
+                setDuty(_volume);
+                Delay::delayMs(100);
+                _drv.setPrescaler(30);
+                Delay::delayMs(100);
+                _drv.setPrescaler(20);
+                Delay::delayMs(100);
+                dropPhases();
+                _drv.setPrescaler(DefaultPrescaler);
+                __enable_irq();
             }
+
         }
 
         void switchPhase(Bldc::Step step) {
-            _drv._timComplimentary.stop();
-            _drv._timComplimentary.setCounter(Torque - (Torque / 5));
+            _currentStep = step;
             if(step == Bldc::Step::ChAl) {
-                _drv.deCommutate(Bldc::MotorPhase::B);
-                _drv.commutateHigh(Bldc::MotorPhase::C);
                 _drv.commutateLow(Bldc::MotorPhase::A);
+                _drv.deCommutate(Bldc::MotorPhase::B);
+                _activeHighPhase = Bldc::MotorPhase::C;
                 _previousStep = Bldc::Step::BhAl;
                 _nextStep = Bldc::Step::ChBl;
                 _bemfPhase = Bldc::MotorPhase::B;
                 _bemfEdge = Bldc::BemfEdge::Falling;
             }
             else if(step == Bldc::Step::ChBl) {
-
-                _drv.deCommutate(Bldc::MotorPhase::A);
-                _drv.commutateHigh(Bldc::MotorPhase::C);
                 _drv.commutateLow(Bldc::MotorPhase::B);
+                _drv.deCommutate(Bldc::MotorPhase::A);
+                _activeHighPhase = Bldc::MotorPhase::C;
                 _previousStep = Bldc::Step::ChAl;
                 _nextStep = Bldc::Step::AhBl;
                 _bemfPhase = Bldc::MotorPhase::A;
                 _bemfEdge = Bldc::BemfEdge::Rising;
             }
             else if(step == Bldc::Step::AhBl) {
-                _drv.deCommutate(Bldc::MotorPhase::C);
-                _drv.commutateHigh(Bldc::MotorPhase::A);
                 _drv.commutateLow(Bldc::MotorPhase::B);
+                _drv.deCommutate(Bldc::MotorPhase::C);
+                _activeHighPhase = Bldc::MotorPhase::A;
                 _previousStep = Bldc::Step::ChBl;
                 _nextStep = Bldc::Step::AhCl;
                 _bemfPhase = Bldc::MotorPhase::C;
                 _bemfEdge = Bldc::BemfEdge::Falling;
             }
             else if(step == Bldc::Step::AhCl) {
-                _drv.deCommutate(Bldc::MotorPhase::B);
-                _drv.commutateHigh(Bldc::MotorPhase::A);
                 _drv.commutateLow(Bldc::MotorPhase::C);
+                _drv.deCommutate(Bldc::MotorPhase::B);
+                _activeHighPhase = Bldc::MotorPhase::A;
                 _previousStep = Bldc::Step::AhBl;
                 _nextStep = Bldc::Step::BhCl;
                 _bemfPhase = Bldc::MotorPhase::B;
                 _bemfEdge = Bldc::BemfEdge::Rising;
             }
             else if(step == Bldc::Step::BhCl) {
-                _drv.deCommutate(Bldc::MotorPhase::A);
-                _drv.commutateHigh(Bldc::MotorPhase::B);
                 _drv.commutateLow(Bldc::MotorPhase::C);
+                _drv.deCommutate(Bldc::MotorPhase::A);
+                _activeHighPhase = Bldc::MotorPhase::B;
                 _previousStep = Bldc::Step::AhCl;
                 _nextStep = Bldc::Step::BhAl;
                 _bemfPhase = Bldc::MotorPhase::A;
                 _bemfEdge = Bldc::BemfEdge::Falling;
             }
             else if(step == Bldc::Step::BhAl) {
-                _drv.deCommutate(Bldc::MotorPhase::C);
-                _drv.commutateHigh(Bldc::MotorPhase::B);
                 _drv.commutateLow(Bldc::MotorPhase::A);
+                _drv.deCommutate(Bldc::MotorPhase::C);
+                _activeHighPhase = Bldc::MotorPhase::B;
                 _previousStep = Bldc::Step::BhCl;
                 _nextStep = Bldc::Step::ChAl;
                 _bemfPhase = Bldc::MotorPhase::C;
@@ -235,8 +193,8 @@ namespace ES::Driver::MotorControl {
                     _bemfEdge = Bldc::BemfEdge::Rising;
                 }
             }
-            _adc.setMaxSampleTime(_bemfPhase);
-            _drv._timComplimentary.start();
+            //_drv.setDuty(_actualDuty);
+            _drv.commutateHigh(_activeHighPhase);
         }
 
         void nextStep() {
@@ -248,168 +206,88 @@ namespace ES::Driver::MotorControl {
             }
         }
 
-        void intTim3Callback() {
-            _drv._timComplimentary.triggerDisable();
-            //_drv.setCompare(_targetThrottle);
-            nextStep();
-            _measureTimer.stop();
-            _measureTimer.setCounter(0);
-            _measureTimer.start();
-            _adcFlag = true;
-            _stepCommutationTimer.stop();
-            _stepCommutationTimer.setCounter(0);
-            calcNewThrottle();
-            _drv.setCompare(_currentThrottle);
+        void reconfigureComparator() {
+            if((_currentStep == Bldc::Step::AhBl) || (_currentStep == Bldc::Step::BhAl)) {
+                _bemfComps.setOutput(Comparator::CompInstance::Opa1Out0);
+            }           
+            if((_currentStep == Bldc::Step::ChBl) || (_currentStep == Bldc::Step::BhCl)) {
+                _bemfComps.setOutput(Comparator::CompInstance::Opa2In1Out0);
+            }      
+            if((_currentStep == Bldc::Step::ChAl) || (_currentStep == Bldc::Step::AhCl)) {
+                _bemfComps.setOutput(Comparator::CompInstance::Opa2In0Out0);
+            }
+        }
+
+        void enableCompInterrupts() {
+            _bemfComps.enableInt();
+        }
+
+        void maskCompInterrupts() {
+            _bemfComps.maskInt();
+        }
+
+        uint8_t getCurrentStep() {
+            return static_cast<uint8_t>(_currentStep);
+        }
+        
+        void intTim1CC4Callback() {
         }
 
         void intTim1Callback() {
-            _drv._timComplimentary.triggerEn();
-            _counter = _measureTimer.getCounter();
-            _currentSwitchPeriod = _counter;
-        }
-
-        void intTim4Callback() {
-            motorStop();
-            //motorStart();
-        }
-
-        void intAdcCallback() {
-            if(_bemfPhase == Bldc::MotorPhase::A) { 
-                    _adcValue = ADC1->IDATAR1;
-                }
-                if(_bemfPhase == Bldc::MotorPhase::B) { 
-                    _adcValue = ADC1->IDATAR2;
-                }
-                if(_bemfPhase == Bldc::MotorPhase::C) { 
-                    _adcValue = ADC1->IDATAR3;
-                }
-                if(_adcFlag) {
-                    if(_bemfEdge == Bldc::BemfEdge::Falling) {
-                        bemfFlag = _adcValue < _halfSupplyAdcValue;
-                    }
-                    else if(_bemfEdge == Bldc::BemfEdge::Rising) {
-                        bemfFlag = _adcValue > _halfSupplyAdcValue;
-                    }
-                    if(bemfFlag) {
-                        _measureTimer.stop();
-                        _measureTimer.setCounter(0);
-                        _measureTimer.start();
-
-                        _adcFlag = false;
-                        //counter = _measureTimer.getCounter() - ProcessingDelay;
-
-                        counter = _counter;
-
-                        _stepCommutationTimer.setPeriod(counter);
-                        _stepCommutationTimer.start();
-                    }
-                    }
-        }
-
-        void updateInputVoltage(uint32_t adcValue) {
-            _inputVoltage = _adc.getVoltageMv<10000, 2200>(adcValue);
-            _halfSupplyAdcValue = adcValue / 2;
-        }
-
-        void motorStop() {
-            _measureTimer.stop();
-            _measureTimer.setCounter(0);
-            _stepCommutationTimer.stop();
-            _stepCommutationTimer.setCounter(0);
-            _drv.deCommutate(Bldc::MotorPhase::A);
-            _drv.deCommutate(Bldc::MotorPhase::B);
-            _drv.deCommutate(Bldc::MotorPhase::C);
-            _adc.disable();
-            _state = MotorState::Idle;
-            _currentThrottle = 0;
-            _drv.setCompare(_currentThrottle);
         }
 
         void reverseDirection() {
-            motorStop();
             _forwardDirection = !_forwardDirection;
-            motorStart();
-        }
-
-        uint32_t getSpeedRpm() {
-            return _rpm;
         }
 
         MotorState getState() {
             return _state;
         }
 
-    private:
-
-        void openLoopStart() {
-            _state = MotorState::OpenLoop;
-            uint32_t currentPeriod = 0;
-            nextStep();
-            Delay_Ms(5);
-            currentPeriod = OpenLoopStartPeriod;
-            while(currentPeriod > OpenLoopEndPeriod) {
-                Delay_Us(currentPeriod);
-                currentPeriod /= OpenLoopAcceleration;
-                nextStep();
+        bool getBemfState() {
+            if(_bemfEdge == Bldc::BemfEdge::Rising) {
+                return !_bemfComps.getOutputState();
             }
-            _measureTimer.setIrq(0);
-            _measureTimer.start();
-
-            _stepCommutationTimer.setIrq(0);
-            _stepCommutationTimer.setPeriod(OpenLoopEndPeriod  * TimerDiv);
-            _stepCommutationTimer.start();
-            _adc.enable();
-            _drv._timComplimentary.setIrq(0);
-            //_targetThrottle = MinimumThrottle;
-            //_drv.setCompare(MinimumThrottle);
-            _state = MotorState::Started;
-            //Delay_Us(OpenLoopEndPeriod);
-            Delay_Ms(OpenLoopEndPeriod);
+            else if(_bemfEdge == Bldc::BemfEdge::Falling) {
+                return _bemfComps.getOutputState();        
+            }
+            else {
+                return false;
+            }
         }
 
-        MotorState _state = MotorState::Idle;
-        uint16_t _currentThrottle = 0;
-        uint16_t _targetThrottle = _currentThrottle;
+        bool edgeIsRising() {
+            return _bemfEdge == Bldc::BemfEdge::Rising;
+        }
 
-        Bldc::Step _currentStep;
-        Bldc::Step _previousStep = static_cast<Bldc::Step>(6);
-        Bldc::Step _nextStep = static_cast<Bldc::Step>(1);
-        Bldc::MotorPhase _bemfPhase;
+    private:
+
+        Comparator::BemfComparators _bemfComps{};
+
+        Driver::MotorControl::FD6288 _drv{_period}; 
+
+        uint8_t _volume = 25;
+
+
+        uint16_t _period;
+        uint16_t _minimumDuty;
+        uint16_t _maximumDuty;
+        uint16_t _minStartupDuty;
+
+        MotorState _state = MotorState::Idle;
+
+        uint16_t _actualDuty = 0;
+
+        volatile Bldc::Step _currentStep = static_cast<Bldc::Step>(1);
+        volatile Bldc::Step _previousStep = static_cast<Bldc::Step>(6);
+        volatile Bldc::Step _nextStep = static_cast<Bldc::Step>(2);
+        volatile Bldc::MotorPhase _bemfPhase;
         Bldc::BemfEdge _bemfEdge;
+        Bldc::MotorPhase _activeHighPhase;
 
         bool _forwardDirection = false;
 
-        uint32_t _rpm = 0;
-        uint32_t _currentSwitchPeriod = 0;
-        uint32_t _stepFullCircleCount = 0;
-        bool _openLoopStart;
-
-        float _inputVoltage = 0; 
-        uint32_t _halfSupplyAdcValue = 0;
-
         void getInstance();
-        bool _adcFlag = false;
-
-        uint16_t _counter = 0;
-
-        static const size_t windowSize = 6;
-        uint16_t buf[windowSize];
-
-        Drv8328 _drv;
-        Adc::AdcCh32vThreePhaseInj& _adc;
-        uint16_t _adcValue;
-
-        Timer::TimerBaseCh32v _measureTimer = {timMeas, 0xFFFF, TimerDiv};
-        Timer::TimerBaseCh32v _stepCommutationTimer = {timComm, 0xFFFF, TimerDiv};
-
-
-        uint16_t counter = 0;
-
-            bool bemfFlag = false;
-
-            uint8_t index = 0;
-            size_t currentSize = 0;
-            uint32_t sum = 0;
         
     };
 

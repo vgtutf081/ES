@@ -323,7 +323,7 @@ namespace ES::Driver {
             return CheckErrorCode::success(status);
         }
 
-        bool  parseData(DataType dataType) {
+        bool parseData(DataType dataType) {
             if(dataType == DataType::CopsData) {
                 bool status = false;
                 if(checkAT(AtCopsData)) {

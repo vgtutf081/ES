@@ -5,8 +5,11 @@
 #include "ch32v20x_adc.h"
 #include "ch32v20x_rcc.h"
 #include "ch32v20x_gpio.h"
+#include <functional>
 
 #include "Bldc.h"
+
+static constexpr uint8_t DmaBufferSize = 3;
 
 namespace ES::Driver::Adc {
 
@@ -72,12 +75,20 @@ namespace ES::Driver::Adc {
             _calibrattionValue = Get_CalibrationValue(_adc);
             NVIC_InitTypeDef NVIC_InitStructure;
             NVIC_InitStructure.NVIC_IRQChannel = ADC_IRQn;
-            NVIC_InitStructure.NVIC_IRQChannelPreemptionPriority = 1;
+            NVIC_InitStructure.NVIC_IRQChannelPreemptionPriority = 0;
             NVIC_InitStructure.NVIC_IRQChannelSubPriority = 1;
             NVIC_InitStructure.NVIC_IRQChannelCmd = ENABLE;
             NVIC_Init(&NVIC_InitStructure);
 
             ADC_Cmd(_adc, DISABLE);
+        }
+
+        void disableTrigger() {
+            ADC_ExternalTrigInjectedConvCmd(_adc, DISABLE);
+        }
+
+        void enableTrigger() {
+            ADC_ExternalTrigInjectedConvCmd(_adc, ENABLE);
         }
         
         AdcCh32vThreePhaseInj() {
@@ -86,28 +97,28 @@ namespace ES::Driver::Adc {
 
         void setMaxSampleTime(uint8_t channel) {
             if(channel == 0) {
-                _adc->SAMPTR2 = ADC_SMP0;
+                _adc->SAMPTR2 = ADC_SMP0_1 | ADC_SMP0_2;
             }
             if(channel == 1) {
-                _adc->SAMPTR2 = ADC_SMP1;
+                _adc->SAMPTR2 = ADC_SMP1_1 | ADC_SMP1_2;
             }
             if(channel == 2) {
-                _adc->SAMPTR2 = ADC_SMP2;
+                _adc->SAMPTR2 = ADC_SMP2_1 | ADC_SMP2_2;
             }
             if(channel == 3) {
-                _adc->SAMPTR2 = ADC_SMP3;
+                _adc->SAMPTR2 = ADC_SMP3_1 | ADC_SMP3_2;
             }
             if(channel == 4) {
-                _adc->SAMPTR2 = ADC_SMP4;
+                _adc->SAMPTR2 = ADC_SMP4_1 | ADC_SMP4_2;
             }
             if(channel == 5) {
-                _adc->SAMPTR2 = ADC_SMP5;
+                _adc->SAMPTR2 = ADC_SMP5_1 | ADC_SMP5_2;
             }
             if(channel == 6) {
-                _adc->SAMPTR2 = ADC_SMP6;
+                _adc->SAMPTR2 = ADC_SMP6_1 | ADC_SMP6_2;
             }
             if(channel == 7) {
-                _adc->SAMPTR2 = ADC_SMP7;
+                _adc->SAMPTR2 = ADC_SMP7_1 | ADC_SMP7_2;
             }
         }
 
@@ -395,4 +406,166 @@ namespace ES::Driver::Adc {
         ADC_TypeDef* _adc;
         s16 _calibrattionValue = 0;
     };
+
+    class AdcCh32vEsc {
+    public:
+        AdcCh32vEsc(ADC_TypeDef* adc, u16 pin1, u16 pin2, const std::function<void(uint16_t inputVoltage, uint16_t current, uint16_t temp)>& handler);
+
+        void init() {
+            //ADC_DMACmd(_adc, ENABLE);
+            ADC_Cmd(_adc, ENABLE);
+
+            ADC_BufferCmd(_adc, DISABLE);
+            ADC_ResetCalibration(_adc);
+            while(ADC_GetResetCalibrationStatus(_adc));
+            ADC_StartCalibration(_adc);
+            while(ADC_GetCalibrationStatus(_adc));
+            _calibrattionValue = Get_CalibrationValue(_adc);
+
+            //ADC_BufferCmd(_adc, ENABLE);
+            ADC_TempSensorVrefintCmd(ENABLE);
+
+            NVIC_InitTypeDef NVIC_InitStructure;
+            NVIC_InitStructure.NVIC_IRQChannel = ADC_IRQn;
+            NVIC_InitStructure.NVIC_IRQChannelPreemptionPriority = 0;
+            NVIC_InitStructure.NVIC_IRQChannelSubPriority = 1;
+            NVIC_InitStructure.NVIC_IRQChannelCmd = ENABLE;
+            NVIC_Init(&NVIC_InitStructure);
+
+            ADC_ITConfig(_adc, ADC_IT_JEOC, ENABLE);
+        }
+
+        void enableAdcDma(/*const std::function<void(uint16_t inputVoltage, uint16_t current, uint16_t temp)>& handler*/) {
+            //_adcDmaTransferComplete = handler;
+            /*DMA_InitTypeDef DMA_InitStructure = {0};
+            RCC_AHBPeriphClockCmd(RCC_AHBPeriph_DMA1, ENABLE);
+            DMA_InitStructure.DMA_PeripheralBaseAddr = (u32)&_adc->RDATAR;
+            DMA_InitStructure.DMA_MemoryBaseAddr = (u32)_adcData;
+            DMA_InitStructure.DMA_DIR = DMA_DIR_PeripheralSRC;
+            DMA_InitStructure.DMA_BufferSize = 3;
+            DMA_InitStructure.DMA_PeripheralInc = DMA_PeripheralInc_Disable;
+            DMA_InitStructure.DMA_MemoryInc = DMA_MemoryInc_Enable;
+            DMA_InitStructure.DMA_PeripheralDataSize = DMA_PeripheralDataSize_HalfWord;
+            DMA_InitStructure.DMA_MemoryDataSize = DMA_MemoryDataSize_HalfWord;
+            DMA_InitStructure.DMA_Mode = DMA_Mode_Circular;
+            DMA_InitStructure.DMA_Priority = DMA_Priority_Medium;
+            DMA_InitStructure.DMA_M2M = DMA_M2M_Disable;
+            DMA_Init(DMA1_Channel1, &DMA_InitStructure);
+
+
+            DMA_ITConfig(DMA1_Channel1,DMA_IT_TC | DMA_IT_TE, ENABLE);
+            DMA_Cmd(DMA1_Channel1, ENABLE);
+
+            NVIC_SetPriority(DMA1_Channel1_IRQn, 0xC0);
+            NVIC_EnableIRQ(DMA1_Channel1_IRQn);*/
+        }
+        
+        u16 getRawValue() {
+            u16 value;
+            value = ADC_GetConversionValue(_adc);
+            return getConversionValue(value);
+        }
+
+        void startConv() {
+            ADC_SoftwareStartConvCmd(_adc, ENABLE);
+        }
+
+        void pollForCOnv() {
+            while(!ADC_GetFlagStatus(_adc, ADC_FLAG_EOC)) {
+            }
+            ADC_ClearFlag(_adc, ADC_FLAG_EOC);
+        }
+
+        template<int TopResistor = 10000, int BottomResistor = 10000>
+        float getVoltageMv(u16 rawValue) {
+            constexpr float k = static_cast<float>(TopResistor + BottomResistor) / BottomResistor;
+            float value = (static_cast<float>(rawValue) / _bitDepth) * _vdd * k;
+            return value;
+        }
+
+        void deInit() {
+            disable();
+            ADC_DeInit(_adc);
+        }
+
+        ADC_TypeDef* getAdcPtr() {
+            return _adc;
+        }
+
+        void enable() {
+            ADC_Cmd(_adc, ENABLE);
+        }
+
+        void disable() {
+            ADC_Cmd(_adc, DISABLE);
+        }
+
+        uint16_t convertRawToTemp(uint16_t rawValue) {
+            return TempSensor_Volt_To_Temper(rawValue * _vdd / _bitDepth);
+        }
+
+        uint8_t getChanFromGpio(u16 pin) {
+            if(pin == GPIO_Pin_0) {
+                return 0;
+            }
+            if(pin == GPIO_Pin_1) {
+                return 1;
+            }
+            if(pin == GPIO_Pin_2) {
+                return 2;
+            }
+            if(pin == GPIO_Pin_3) {
+                return 3;
+            }
+            if(pin == GPIO_Pin_4) {
+                return 4;
+            }
+            if(pin == GPIO_Pin_5) {
+                return 5;
+            }
+            if(pin == GPIO_Pin_6) {
+                return 6;
+            }
+            if(pin == GPIO_Pin_7) {
+                return 7;
+            }
+            return 0;
+        }
+
+        u16 getConversionValue(s16 val) {
+            if((val + _calibrattionValue) < 0)
+                return 0;
+            if((_calibrattionValue + val) > 4095||val==4095)
+                return 4095;
+            return (val + _calibrattionValue);
+        }
+
+        void sendParams() {
+            uint16_t rawVoltage = ADC_GetInjectedConversionValue(_adc, ADC_InjectedChannel_1);
+            uint16_t temp = ADC_GetConversionValue(_adc);
+            _adcComplete(rawVoltage * _vdd / _bitDepth, 0, convertRawToTemp(temp));
+        }
+
+
+
+    private:
+
+        void calibration() {
+            ADC_BufferCmd(_adc, DISABLE);
+            ADC_ResetCalibration(_adc);
+            while(ADC_GetResetCalibrationStatus(_adc));
+            ADC_StartCalibration(_adc);
+            while(ADC_GetCalibrationStatus(_adc));
+            _calibrattionValue = Get_CalibrationValue(_adc);
+        }
+        std::function<void(uint16_t inputVoltage, uint16_t current, uint16_t temperature)> _adcComplete{};
+        uint16_t _adcData[3];
+
+        u16 _vdd = 3300;
+        u16 _bitDepth = 4095;
+        ADC_TypeDef* _adc;
+        s16 _calibrattionValue = 0;
+    };
+
+    
 }

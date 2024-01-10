@@ -5,7 +5,6 @@ add_library(${LIBRARY_NAME} INTERFACE)
 target_include_directories(${LIBRARY_NAME}
     INTERFACE
         "${CMAKE_CURRENT_SOURCE_DIR}"
-	#"${CMAKE_CURRENT_SOURCE_DIR}"
         "${CMAKE_CURRENT_SOURCE_DIR}/Gpio"
         "${CMAKE_CURRENT_SOURCE_DIR}/Gpio/Extender"
         "${CMAKE_CURRENT_SOURCE_DIR}/Uart"
@@ -15,6 +14,7 @@ target_include_directories(${LIBRARY_NAME}
         "${CMAKE_CURRENT_SOURCE_DIR}/Adc" 
         "${CMAKE_CURRENT_SOURCE_DIR}/I2C" 
         "${CMAKE_CURRENT_SOURCE_DIR}/Telemetry" 
+        "${CMAKE_CURRENT_SOURCE_DIR}/Comparator"
 )
 
 #source
@@ -36,7 +36,7 @@ target_sources(${LIBRARY_NAME}
     ${CMAKE_CURRENT_SOURCE_DIR}/Gpio/ExtiCommon.h
     ${CMAKE_CURRENT_SOURCE_DIR}/Gpio/ExtiNrf52.h
     ${CMAKE_CURRENT_SOURCE_DIR}/Gpio/ExtiNrf52.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/MotorControl/DRV8328.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/MotorControl/HalfBridgeDriver.h
     ${CMAKE_CURRENT_SOURCE_DIR}/MotorControl/Esc.h
     ${CMAKE_CURRENT_SOURCE_DIR}/MotorControl/Esc.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/MotorControl/Bldc.h
@@ -48,9 +48,14 @@ target_sources(${LIBRARY_NAME}
     ${CMAKE_CURRENT_SOURCE_DIR}/Timer/TimerNrf52.h
     ${CMAKE_CURRENT_SOURCE_DIR}/Timer/TimerCh32.h
     ${CMAKE_CURRENT_SOURCE_DIR}/Timer/ITimer.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/Timer/SystickCh32.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/Timer/SystickCh32.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/Adc/AdcCh32v.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/Adc/AdcCh32v.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/Adc/AdcNrf52.h
     ${CMAKE_CURRENT_SOURCE_DIR}/Adc/IAdc.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/Comparator/Comparator.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/Comparator/Comparator.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/I2C/II2C.h
     ${CMAKE_CURRENT_SOURCE_DIR}/I2C/I2CNrf52.h
     ${CMAKE_CURRENT_SOURCE_DIR}/Telemetry/Dshot.h
