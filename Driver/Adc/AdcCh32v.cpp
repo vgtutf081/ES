@@ -1,3 +1,5 @@
+#if defined CH32V_ADC
+
 #include "AdcCh32v.h"
 
 ES::Driver::Adc::AdcCh32vEsc* adcPtr;
@@ -70,3 +72,5 @@ extern "C" {
         }
     }
 }
+
+#endif

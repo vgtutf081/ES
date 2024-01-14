@@ -1,8 +1,8 @@
 #pragma once
 
-#include "ch32v20x_gpio.h"
-
 namespace ES::Driver::Comparator {
+
+#include "ch32v20x_gpio.h"
 
 #if defined CH32V203F8U6
 
@@ -24,8 +24,7 @@ namespace ES::Driver::Comparator {
 #define EXTI_LINE EXTI_Line2
 #define EXTI_IRQ EXTI2_IRQn
 
-
-
+#endif
 
     enum class CompInstance {
         Opa1Out0,
@@ -119,7 +118,5 @@ namespace ES::Driver::Comparator {
     private:
         static bool _opaBusy;
     };
-
-#endif
 
 }

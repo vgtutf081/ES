@@ -6,6 +6,7 @@
 #include "ch32v20x_rcc.h"
 #include "ch32v20x_gpio.h"
 #include <functional>
+#include "stdint.h"
 
 #include "Bldc.h"
 

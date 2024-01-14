@@ -2,6 +2,8 @@
 
 #include "system_ch32v20x.h"
 
+#include "stdint.h"
+
 namespace ES::Driver::MotorControl::Bldc {
     
     /*enum class Step : uint8_t{
