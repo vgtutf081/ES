@@ -60,19 +60,17 @@ namespace ES::Driver {
             //_nReset.reset();
         }
 
-        bool sendCommand(const char * s) {
+        bool sendCommand(const char * s, const char * expectedAnswer = nullptr) {
             bool status = sendString(s, 2);
             _atCommandForCheck = s;
             _moduleStatus = ModuleStatus::WaitingAtCommandRepeat;
-            size_t counter = 20;
-            while(counter--) {
-                if(_commandConfirmed.take(100)) {
-                    _atCommandForCheck = nullptr;
-                    _moduleStatus = ModuleStatus::None;
-                    return true;
-                }
+            status &= _commandConfirmed.take(1000);
+            _atCommandForCheck = nullptr;
+            if(expectedAnswer != nullptr) {
+                status &= checkAT(expectedAnswer);
             }
-            return false;
+            _moduleStatus = ModuleStatus::None;
+            return status;
         }
 
         bool checkCallsAvailability() {
@@ -170,7 +168,7 @@ namespace ES::Driver {
                 return;
             }
             if(_moduleStatus == ModuleStatus::WaitingForOk) {
-                if(checkAT(AtStatusOk)) {
+                if(checkForOk()) {
                     _okRecieved.give();
                 }
                 return;
@@ -179,11 +177,11 @@ namespace ES::Driver {
                 if(checkAT(_atCommandForCheck)) {
                     _commandConfirmed.give();
                 }
-                if(_parserIndex != 0) {
+                /*if(_parserIndex != 0) {
                     if(checkAT(AtStatusOk)) {
                         _okRecieved.give();
                     }
-                }
+                }*/
                 return;
             }
             if(_moduleStatus == ModuleStatus::WaitingForData) {
@@ -376,16 +374,7 @@ namespace ES::Driver {
             if(!status) {
                 return false;
             }
-            size_t count = 20;
-            _moduleStatus = ModuleStatus::WaitingForOk;
-            while(count--) {
-                if(_okRecieved.take(100)) {
-                    break;
-                }
-            }
-            if(count == 0) {
-                return false;
-            }
+            status &= checkForOk();
             _phoneStatus = PhoneStatus::OutgoingPreCall;
             return status;
         }
@@ -393,7 +382,6 @@ namespace ES::Driver {
         bool disconnectCall() {
             auto status = sendCommand(SetAthAvilable);
             size_t count = 20;
-            _moduleStatus;
             while(count--) {
                 if(_okRecieved.take(10)) {
                     break;
@@ -428,6 +416,60 @@ namespace ES::Driver {
             return _callsAvailable;
         }
 
+        bool activatePdpContext(GsmOperator gsmOperator) {
+            if(!checkNetworkRegistration()) {
+                return false;
+            }
+            if(!enableCgattCgact()) {
+                return false;
+            }
+            setOperator(gsmOperator);
+            if(!definePdpContext()) {
+                return false;
+            }
+            return true;
+        }
+
+        bool checkNetworkRegistration() {
+            auto status = sendCommand(CregReguest, CregIsOk);
+            return status && checkForOk();
+        }
+
+        bool enableCgattCgact() {
+            bool status = true;
+            status &= sendCommand(CgattRequest, CgattIsOk);
+            status &= checkForOk();
+
+            status &= sendCommand(CgactRequest, CgactIsOk);
+            status &= checkForOk();
+
+            return status;
+        }
+
+        void setOperator(GsmOperator gsmOperator) {
+            _gsmOperator = gsmOperator;
+        }
+
+        bool definePdpContext() {
+            auto status = false;
+            if(_gsmOperator == GsmOperator::Tele2) {
+                status = sendCommand(CgdcontTele2);
+            }
+            return status && waitingForOk();
+        }
+
+        bool checkForOk() {
+            return checkAT(AtStatusOk);
+        }
+
+        bool waitingForOk(uint32_t timeout = 100) {
+            bool status = true;
+            _moduleStatus = ModuleStatus::WaitingForOk;
+            status &= _okRecieved.take(timeout);
+            _moduleStatus = ModuleStatus::None;
+            return status;
+        }
+
         Threading::BinarySemaphore messageRecSem;
         Threading::BinarySemaphore incomingCall;
         
@@ -445,6 +487,8 @@ namespace ES::Driver {
 
     private:
 
+
+        GsmOperator _gsmOperator = GsmOperator::Undefined;
         DataType _gpsData;
 
         Threading::BinarySemaphore _readyStatusRecieved;

@@ -31,7 +31,7 @@ namespace ES::Driver {
         CopsData,
         NoneData,
         CallData,
-        MissedCallData,
+        MissedCallData
     };
 
     enum CardinalDirections {
@@ -47,6 +47,15 @@ namespace ES::Driver {
         Utran = 2,
         Eutran = 7,
         Cdma_Hdr = 8
+    };
+
+    enum GsmOperator {
+        Tele2,
+        Mts,
+        Megafon,
+        Beeline,
+        Rostelecom,
+        Undefined
     };
 
     union Date {

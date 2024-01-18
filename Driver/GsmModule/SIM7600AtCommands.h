@@ -23,6 +23,12 @@ namespace ES::Driver {
     const char AtStatusReady[] = {'R', 'E', 'A', 'D', 'Y'};
     const char AtStatusOk[] = "OK";
     const char AtCrLf[] = {CR, LF};
+    const char CregIsOk[] = "+CREG: 0,1";
+    const char CgattRequest[] = "AT+CGATT?";
+    const char CgactRequest[] = "AT+CGACT?";
+    const char CgattIsOk[] = "+CGATT: 1";
+    const char CgactIsOk[] = "+CGACT: 1,1";
+
 
     const char AnswerCall[] = "ATA";
     const char DisconnectCall[] = "ATH";
@@ -33,5 +39,10 @@ namespace ES::Driver {
     const char NoCarrier[] = "NO CARRIER";
     const char Ring[] = "RING";
     const char MissedCall[] = "MISSED_CALL";
+    const char CregReguest[] = "AT+CREG?";
+    const char Tele2Apn[] = "internet.tele2.ru";
+    const char CgdcontTele2[] = "AT+CGDCONT=1,\"IP\",\"internet.tele2.ru\"";
+    const char CgattEnable[] = "AT+CGATT=1";
+    const char CgactEnable[] = "AT+CGACT=1,1";
 
 }

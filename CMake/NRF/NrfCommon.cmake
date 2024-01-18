@@ -27,16 +27,7 @@ target_link_options(NRF INTERFACE
     LINKER:-gc-sections 
 )
 
-
-#target_link_options(NRF INTERFACE $<$<CONFIG:RELEASE>:LINKER:--undefined=vTaskSwitchContext,--undefined=HardFault_HandlerC,-undefined=_realloc_r>)
-
 target_compile_definitions(NRF INTERFACE
     NRF
-    #NRF52840_XXAA
-    #BSP_DEFINES_ONLY
-    #CONFIG_GPIO_AS_PINRESET
     FLOAT_ABI_HARD
-    #FREERTOS
-    #USE_APP_CONFIG
-    #"__weak=__attribute__((weak))"
 )
