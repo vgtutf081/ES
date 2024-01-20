@@ -14,23 +14,39 @@ namespace ES::Driver::Gpio {
 
         }
 
-        void set() override {
-            _extender.set(_id);
+    //I met with the extender fall, so I want to get the result without breaking the api
+        void set(bool& retSuccess) {
+            retSuccess = _extender.set(_id);
             _pinStatus = true;
         }
 
-        void reset() override {
-            _extender.reset(_id);
+        void reset(bool& retSuccess) {
+            retSuccess = _extender.reset(_id);
             _pinStatus = false;
-        };
+        }
 
-        void toggle() override {
+        void toggle(bool& retSuccess) {
             if(_pinStatus) {
-                _extender.reset(_id);
+                retSuccess = _extender.reset(_id);
             }
             else {
-                _extender.set(_id);
+                retSuccess = _extender.set(_id);
             }
+        }
+
+        void set() override {
+           bool success = false;
+           set(success);
+        }
+
+        void reset() override {
+            bool success = false;
+            reset(success);            
+        }
+
+        void toggle() override {
+            bool success = false;
+            toggle(success);
         }
 
         bool read() const override {
