@@ -29,19 +29,34 @@ namespace ES::Driver {
     public:
 
         uint8_t counterTest = 0;
-
-        Sim7600x(Uarte::UarteNrf uart, Timer::TimerNrf52 timer, Gpio::IGpio& nDisable/*, Gpio::Nrf52Gpio nReset, Gpio::Nrf52Gpio levelConvEn, Gpio::Nrf52Gpio modulePowerEn, Gpio::Nrf52Gpio ldo1V8En*/) : _uart(uart), _nDisable(nDisable), _timer(timer)/*, _nReset(nReset), _levelConvEn(levelConvEn), _modulePowerEn(modulePowerEn), _ldo1V8En(ldo1V8En) */{
-
-        }
-
-        void enableModule() {
+    #if defined(HARDWARE_VERSION_1_0_0)
+        Sim7600x(Uarte::UarteNrf uart, Timer::TimerNrf52 timer,
+                    Gpio::IGpio& nDisable, Gpio::IGpio& nReset
+                    ) : 
+                    _uart(uart), _timer(timer),
+                    _nDisable(nDisable), _nReset(nReset){
             std::fill(_recieveBuf.begin(), _recieveBuf.end(), 0);
             _uart.init(eventHandler, this); 
             _uart.getStream(std::begin(_recieveByte), 1); // crlf first
             _timer.init(1, timerEventHandler, this);
+        }
+    #else
+        Sim7600x(Uarte::UarteNrf uart, Timer::TimerNrf52 timer, Gpio::IGpio& nDisable/*, Gpio::Nrf52Gpio nReset, Gpio::Nrf52Gpio levelConvEn, Gpio::Nrf52Gpio modulePowerEn, Gpio::Nrf52Gpio ldo1V8En*/) : _uart(uart), _nDisable(nDisable), _timer(timer)/*, _nReset(nReset), _levelConvEn(levelConvEn), _modulePowerEn(modulePowerEn), _ldo1V8En(ldo1V8En) */{
+
+        }
+    #endif
+
+        void enableModule() {
             //_modulePowerEn.set();
-            _nDisable.configureOutput();
-            _nDisable.set();
+
+            //doesn`t work in my PCB
+            // _nReset.configureOutput();
+            // _nReset.set();
+            // _nReset.reset();
+
+            // _nDisable.configureOutput();
+            // _nDisable.set();
+
             _enableStatus = ModuleEnableStatus::Disabled;
             while(_enableStatus != ModuleEnableStatus::Enabled) {
                 Threading::sleepForMs(100);
@@ -117,6 +132,10 @@ namespace ES::Driver {
                     _recieveBuf[_bufIndex] = _recieveByte[0];
                     nextRecieve();
                }
+            }else if(p_event->type == NRFX_UARTE_EVT_TX_DONE){
+
+            }else{
+                //error state
             }
         }
 
@@ -498,10 +517,7 @@ namespace ES::Driver {
 
         Uarte::UarteNrf _uart;
         Gpio::IGpio& _nDisable;
-        //Gpio::Nrf52Gpio _nReset;
-        //Gpio::Nrf52Gpio _levelConvEn;
-        //Gpio::Nrf52Gpio _modulePowerEn;
-       // Gpio::Nrf52Gpio _ldo1V8En;
+        Gpio::IGpio& _nReset;
 
         uint8_t _gsmOperatorSelectionMode;
         bool _callsAvailable = false;
