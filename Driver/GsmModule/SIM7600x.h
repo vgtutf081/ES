@@ -134,8 +134,9 @@ namespace ES::Driver {
                }
             }else if(p_event->type == NRFX_UARTE_EVT_TX_DONE){
 
-            }else{
+            }else{ 
                 //error state
+                nextRecieve();
             }
         }
 
