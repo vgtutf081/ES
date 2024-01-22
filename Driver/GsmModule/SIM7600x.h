@@ -29,22 +29,19 @@ namespace ES::Driver {
     public:
 
         uint8_t counterTest = 0;
-    #if defined(HARDWARE_VERSION_1_0_0)
-        Sim7600x(Uarte::UarteNrf uart, Timer::TimerNrf52 timer,
-                    Gpio::IGpio& nDisable, Gpio::IGpio& nReset
-                    ) : 
-                    _uart(uart), _timer(timer),
-                    _nDisable(nDisable), _nReset(nReset){
+        Sim7600x(Uarte::UarteNrf uart, Timer::TimerNrf52 timer, Gpio::IGpio& nDisable, Gpio::IGpio& nReset) : 
+        _uart(uart), _timer(timer), _nDisable(nDisable), _nReset(nReset)
+        {
             std::fill(_recieveBuf.begin(), _recieveBuf.end(), 0);
             _uart.init(eventHandler, this); 
             _uart.getStream(std::begin(_recieveByte), 1); // crlf first
             _timer.init(1, timerEventHandler, this);
-        }
-    #else
-        Sim7600x(Uarte::UarteNrf uart, Timer::TimerNrf52 timer, Gpio::IGpio& nDisable/*, Gpio::Nrf52Gpio nReset, Gpio::Nrf52Gpio levelConvEn, Gpio::Nrf52Gpio modulePowerEn, Gpio::Nrf52Gpio ldo1V8En*/) : _uart(uart), _nDisable(nDisable), _timer(timer)/*, _nReset(nReset), _levelConvEn(levelConvEn), _modulePowerEn(modulePowerEn), _ldo1V8En(ldo1V8En) */{
 
+            _nDisable.configureOutput();
+            _nDisable.set();
         }
-    #endif
+
+        //Sim7600x(Uarte::UarteNrf uart, Timer::TimerNrf52 timer, Gpio::IGpio& nDisable/*, Gpio::Nrf52Gpio nReset, Gpio::Nrf52Gpio levelConvEn, Gpio::Nrf52Gpio modulePowerEn, Gpio::Nrf52Gpio ldo1V8En*/) : _uart(uart), _nDisable(nDisable), _timer(timer)/*, _nReset(nReset), _levelConvEn(levelConvEn), _modulePowerEn(modulePowerEn), _ldo1V8En(ldo1V8En) */{}
 
         void enableModule() {
             //_modulePowerEn.set();
