@@ -27,7 +27,7 @@ namespace ES::Driver {
     const char CgattRequest[] = "AT+CGATT?";
     const char CgactRequest[] = "AT+CGACT?";
     const char CgattIsOk[] = "+CGATT: 1";
-    const char CgactIsOk[] = "+CGACT: 1,1";
+    const char CgactIsOk[] = "+CGACT: 1,1\r\n+CGACT: 2,1\r\n+CGACT: 3,0";
 
 
     const char AnswerCall[] = "ATA";
@@ -40,9 +40,14 @@ namespace ES::Driver {
     const char Ring[] = "RING";
     const char MissedCall[] = "MISSED_CALL";
     const char CregReguest[] = "AT+CREG?";
+    const char CregEnable[] = "AT+CREG=1";
     const char Tele2Apn[] = "internet.tele2.ru";
     const char CgdcontTele2[] = "AT+CGDCONT=1,\"IP\",\"internet.tele2.ru\"";
     const char CgattEnable[] = "AT+CGATT=1";
     const char CgactEnable[] = "AT+CGACT=1,1";
-
+    const char CmnpGsmOnly[] = "AT+CNMP=13";
+    const char CmnpLteOnly[] = "AT+CNMP=38";
+    const char CmnpGsmLteOnly[] = "AT+CNMP=51";
+    const char CmnpAutoOnly[] = "AT+CNMP=2";
+    const char CheckCsq[] = "AT+CSQ";
 }

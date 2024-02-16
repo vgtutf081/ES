@@ -15,6 +15,7 @@ target_include_directories(${LIBRARY_NAME}
         "${CMAKE_CURRENT_SOURCE_DIR}/I2C" 
         "${CMAKE_CURRENT_SOURCE_DIR}/Telemetry" 
         "${CMAKE_CURRENT_SOURCE_DIR}/Comparator"
+        "${CMAKE_CURRENT_SOURCE_DIR}/PPP"
 )
 
 #source
@@ -45,6 +46,7 @@ target_sources(${LIBRARY_NAME}
     ${CMAKE_CURRENT_SOURCE_DIR}/GsmModule/SIM7600AtCommands.h
     ${CMAKE_CURRENT_SOURCE_DIR}/GsmModule/SIMTypes.h
     ${CMAKE_CURRENT_SOURCE_DIR}/GsmModule/SIM7600x.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/PPP/PPP.h
     ${CMAKE_CURRENT_SOURCE_DIR}/Timer/TimerNrf52.h
     ${CMAKE_CURRENT_SOURCE_DIR}/Timer/TimerCh32.h
     ${CMAKE_CURRENT_SOURCE_DIR}/Timer/ITimer.h
