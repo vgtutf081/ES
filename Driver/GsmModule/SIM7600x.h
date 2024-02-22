@@ -20,6 +20,8 @@
 #include "SIM7600AtCommands.h"
 #include "SIMTypes.h"
 
+#include "PPP.h"
+
 namespace ES::Driver {
   
     static constexpr size_t timeSize = 7;
@@ -32,28 +34,21 @@ namespace ES::Driver {
         Sim7600x(Uarte::UarteNrf uart, Timer::TimerNrf52 timer, Gpio::IGpio& nDisable, Gpio::IGpio& nReset) : 
         _uart(uart), _timer(timer), _nDisable(nDisable), _nReset(nReset)
         {
-            std::fill(_recieveBuf.begin(), _recieveBuf.end(), 0);
-            _uart.init(eventHandler, this); 
-            _uart.getStream(std::begin(_recieveByte), 1); // crlf first
-            _timer.init(1, timerEventHandler, this);
 
-            _nDisable.configureOutput();
-            _nDisable.set();
+
+            //_nDisable.configureOutput();
+            //_nDisable.set();
         }
 
         //Sim7600x(Uarte::UarteNrf uart, Timer::TimerNrf52 timer, Gpio::IGpio& nDisable/*, Gpio::Nrf52Gpio nReset, Gpio::Nrf52Gpio levelConvEn, Gpio::Nrf52Gpio modulePowerEn, Gpio::Nrf52Gpio ldo1V8En*/) : _uart(uart), _nDisable(nDisable), _timer(timer)/*, _nReset(nReset), _levelConvEn(levelConvEn), _modulePowerEn(modulePowerEn), _ldo1V8En(ldo1V8En) */{}
 
         void enableModule() {
-            //_modulePowerEn.set();
-
-            //doesn`t work in my PCB
-            // _nReset.configureOutput();
-            // _nReset.set();
-            // _nReset.reset();
-
-            // _nDisable.configureOutput();
-            // _nDisable.set();
-
+            _nDisable.configureOutput();
+            _nDisable.set();
+            std::fill(_recieveBuf.begin(), _recieveBuf.end(), 0);
+            _uart.init(eventHandler, this); 
+            _uart.getStream(std::begin(_recieveByte), 1); // crlf first
+            _timer.init(1, timerEventHandler, this);
             _enableStatus = ModuleEnableStatus::Disabled;
             while(_enableStatus != ModuleEnableStatus::Enabled) {
                 Threading::sleepForMs(100);
@@ -73,7 +68,7 @@ namespace ES::Driver {
         }
 
         bool sendCommand(const char * s, const char * expectedAnswer = nullptr) {
-            bool status = sendString(s, 2);
+            bool status = sendString(s);
             _atCommandForCheck = s;
             _moduleStatus = ModuleStatus::WaitingAtCommandRepeat;
             status &= _commandConfirmed.take(1000);
@@ -104,7 +99,7 @@ namespace ES::Driver {
             return status;
         }
  
-        ret_code_t sendString(const char * s, size_t size) {
+        ret_code_t sendString(const char * s) {
             ret_code_t status;
             size_t size2 = CommonTools::charArraySize(s);
             char tempBuf[128];
@@ -112,6 +107,14 @@ namespace ES::Driver {
             memcpy(&tempBuf[2], s, size2);
             memcpy(&tempBuf[size2 + 2], AtCrLf, 2);
             status =_uart.writeStream(tempBuf, size2 + 4);
+            return CheckErrorCode::success(status);
+        }
+
+        ret_code_t sendData(const char * s, size_t arraySize) {
+            ret_code_t status;
+            char tempBuf[128];
+            memcpy(tempBuf, s, arraySize);
+            status =_uart.writeStream(tempBuf, arraySize);
             return CheckErrorCode::success(status);
         }
 
@@ -133,7 +136,7 @@ namespace ES::Driver {
 
             }else{ 
                 //error state
-                nextRecieve();
+                _uart.getStream(std::begin(_recieveByte), 1);
             }
         }
 
@@ -258,6 +261,7 @@ namespace ES::Driver {
 
         bool checkAT(const char* s) {
             bool status = true;
+            size_t stringSize = CommonTools::charArraySize(s) + _parserIndex;
             skipCrLf();
             /*if(_parseBuf[_parserIndex] == CR) {
                 _parserIndex++;
@@ -268,7 +272,7 @@ namespace ES::Driver {
             if(_parseBuf[_parserIndex] == LF) {
                 _parserIndex++;
             }*/
-            for(uint8_t i = 0; _parseBuf[_parserIndex] != CR; _parserIndex++, i++) {
+            for(uint8_t i = 0; _parserIndex < stringSize; _parserIndex++, i++) {
                 if(s[i] == '\0') {
                     break;
                 }
@@ -302,7 +306,7 @@ namespace ES::Driver {
         bool enableGps() {
             ret_code_t status;
             if(_moduleStatus == ModuleStatus::None && !_gpsReady) {
-                status = sendString(AtCommandGpsEnable, sizeof(AtCommandGpsEnable));
+                status = sendString(AtCommandGpsEnable);
                 _atCommandForCheck = AtCommandGpsOk;
                 _moduleStatus = ModuleStatus::WaitingReadyStatus;
                 size_t counter = 20;
@@ -323,7 +327,7 @@ namespace ES::Driver {
             }
             ret_code_t status;
             if(_moduleStatus == ModuleStatus::None) {
-                status = sendString(AtCommandGpsInfo, sizeof(AtCommandGpsInfo));
+                status = sendString(AtCommandGpsInfo);
                 _atCommandForCheck = AtCommandGpsInfo;
                 _moduleStatus = ModuleStatus::WaitingAtCommandRepeat;
             }
@@ -489,7 +493,57 @@ namespace ES::Driver {
 
         Threading::BinarySemaphore messageRecSem;
         Threading::BinarySemaphore incomingCall;
-        
+
+        void testCall() {
+            sendCommand(AtdTest);
+        }
+
+        void enableCreg() {
+            sendCommand(CregEnable);
+        }
+
+        void checkCreg() {
+            sendCommand(CregReguest);
+        }
+
+        void ckeckCops() {
+            sendCommand(AtCopsRead);
+        }
+
+        void setCmnp(uint8_t value) {
+            if(value == 1) {
+                sendCommand(CmnpGsmLteOnly);
+            }
+            if(value == 2) {
+                sendCommand(CmnpLteOnly);
+            }
+            if(value == 3) {
+                sendCommand(CmnpGsmOnly);
+            }
+            if(value == 4) {
+                sendCommand(CmnpAutoOnly);
+            }
+        }        
+
+        void checkCsq() {
+            sendCommand(CheckCsq);
+        }
+
+        void sendLcp() {
+            size_t packetSize = 0;
+            unsigned char *ptr = _ppp.getLcpPacket(packetSize);
+            bool status = sendData(reinterpret_cast<char*>(ptr), packetSize);
+            asm("nop");
+        }
+
+        void switchToDataMode() {
+            sendCommand(CgData);
+        }
+
+        void pppSend(size_t packetSize) {
+
+        }
+
     private:
    
         static void eventHandler(nrfx_uarte_event_t const * p_event, void * p_context) {
@@ -502,9 +556,11 @@ namespace ES::Driver {
             _this->handleEventTImer(event_type);
 		}
 
+
     private:
 
-
+        std::function<void(size_t)> _pppSend = std::bind(&Sim7600x::pppSend, this, std::placeholders::_1);
+        PPP _ppp{_pppSend};
         GsmOperator _gsmOperator = GsmOperator::Undefined;
         DataType _gpsData;
 

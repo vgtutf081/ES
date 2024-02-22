@@ -50,4 +50,6 @@ namespace ES::Driver {
     const char CmnpGsmLteOnly[] = "AT+CNMP=51";
     const char CmnpAutoOnly[] = "AT+CNMP=2";
     const char CheckCsq[] = "AT+CSQ";
+    const char Ato[] = "ATO";
+    const char CgData[] = "AT+CGDATA=\"PPP\",1";
 }
