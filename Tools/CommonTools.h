@@ -18,4 +18,10 @@ namespace ES::CommonTools {
     {
         return (uint16_t)((((uint16_t) (val)) << 8) | (((uint16_t) (val)) >> 8));
     }
+
+    inline uint16_t htonl(uint16_t val)
+    {
+        return (((uint32_t)htons(val) << 16) | uint32_t((uint32_t)(val) >> 16));
+    }
+
 }

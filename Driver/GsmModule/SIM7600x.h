@@ -34,37 +34,40 @@ namespace ES::Driver {
         Sim7600x(Uarte::UarteNrf uart, Timer::TimerNrf52 timer, Gpio::IGpio& nDisable, Gpio::IGpio& nReset) : 
         _uart(uart), _timer(timer), _nDisable(nDisable), _nReset(nReset)
         {
-
-
-            //_nDisable.configureOutput();
-            //_nDisable.set();
-        }
-
-        //Sim7600x(Uarte::UarteNrf uart, Timer::TimerNrf52 timer, Gpio::IGpio& nDisable/*, Gpio::Nrf52Gpio nReset, Gpio::Nrf52Gpio levelConvEn, Gpio::Nrf52Gpio modulePowerEn, Gpio::Nrf52Gpio ldo1V8En*/) : _uart(uart), _nDisable(nDisable), _timer(timer)/*, _nReset(nReset), _levelConvEn(levelConvEn), _modulePowerEn(modulePowerEn), _ldo1V8En(ldo1V8En) */{}
-
-        void enableModule() {
-            _nDisable.configureOutput();
-            _nDisable.set();
             std::fill(_recieveBuf.begin(), _recieveBuf.end(), 0);
             _uart.init(eventHandler, this); 
             _uart.getStream(std::begin(_recieveByte), 1); // crlf first
             _timer.init(1, timerEventHandler, this);
+
+            _nDisable.configureOutput();
+            _nDisable.set();
+            _nReset.configureOutput();
+            _nReset.set();//default power off
+
             _enableStatus = ModuleEnableStatus::Disabled;
-            while(_enableStatus != ModuleEnableStatus::Enabled) {
-                Threading::sleepForMs(100);
-            }
+        }
+
+        //Sim7600x(Uarte::UarteNrf uart, Timer::TimerNrf52 timer, Gpio::IGpio& nDisable/*, Gpio::Nrf52Gpio nReset, Gpio::Nrf52Gpio levelConvEn, Gpio::Nrf52Gpio modulePowerEn, Gpio::Nrf52Gpio ldo1V8En*/) : _uart(uart), _nDisable(nDisable), _timer(timer)/*, _nReset(nReset), _levelConvEn(levelConvEn), _modulePowerEn(modulePowerEn), _ldo1V8En(ldo1V8En) */{}
+
+        void enableModule() { 
+            _nReset.reset(); //power on
+            _nDisable.reset();
+            _enableStatus = ModuleEnableStatus::Disabled;
+            // while(_enableStatus != ModuleEnableStatus::Enabled) {
+            //     Threading::sleepForMs(100);
+            // }
         }
 
         void disableModule() {
             _nDisable.reset(); //TODO invert
             Threading::sleepForMs(50);
-            //_modulePowerEn.reset();
+
         }
 
         void resetModule() {
-            //_nReset.set();
+            _nReset.set();
             Threading::sleepForMs(100);
-            //_nReset.reset();
+            _nReset.reset();
         }
 
         bool sendCommand(const char * s, const char * expectedAnswer = nullptr) {
@@ -305,6 +308,9 @@ namespace ES::Driver {
 
         bool enableGps() {
             ret_code_t status;
+            if(_enableStatus == ModuleEnableStatus::Disabled) {
+                return false; //modele waiting ready status. It has no time for GPS
+            }
             if(_moduleStatus == ModuleStatus::None && !_gpsReady) {
                 status = sendString(AtCommandGpsEnable);
                 _atCommandForCheck = AtCommandGpsOk;
@@ -319,6 +325,10 @@ namespace ES::Driver {
             }
             _atCommandForCheck = nullptr;
             return CheckErrorCode::success(status);
+        }
+
+        bool gpsReady() {
+            return _gpsReady;
         }
 
         bool getLocation() {
@@ -493,7 +503,7 @@ namespace ES::Driver {
 
         Threading::BinarySemaphore messageRecSem;
         Threading::BinarySemaphore incomingCall;
-
+        
         void testCall() {
             sendCommand(AtdTest);
         }
@@ -543,7 +553,6 @@ namespace ES::Driver {
         void pppSend(size_t packetSize) {
 
         }
-
     private:
    
         static void eventHandler(nrfx_uarte_event_t const * p_event, void * p_context) {
@@ -555,7 +564,6 @@ namespace ES::Driver {
             auto _this = reinterpret_cast<Sim7600x*>(p_context);
             _this->handleEventTImer(event_type);
 		}
-
 
     private:
 

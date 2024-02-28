@@ -48,13 +48,34 @@ namespace ES::Driver {
 
     static constexpr uint8_t IpcpAddress = 0x03;
 
-    static constexpr uint16_t IpcpTimeut = 1000;
+    static constexpr uint16_t IpcpTimeout = 1000;
 
     static constexpr uint16_t IpcpIpAddress = 0x03;
     static constexpr uint16_t IpcpPrimaryDns = 0x81;
     static constexpr uint16_t IpcpSecondaryDns = 0x83;
 
     static constexpr uint8_t IpcpRetryCount = 6;
+    
+    static constexpr uint16_t PapTimeout = 10000;
+
+    static constexpr uint8_t PapUserNameSize = 16;
+    static constexpr uint8_t PapPasswordSize = 16;
+
+    static constexpr uint8_t PapRetryCount = 3;
+
+    static constexpr uint8_t AhdlcTxOffline = 20;
+    static constexpr uint8_t LcpFlag = 0x7E;
+    static constexpr uint8_t Address = 0xFF;
+    static constexpr uint8_t Control = 0x03;
+    static constexpr uint16_t LcpProtocol = 0xC021;
+    static constexpr uint16_t ahdlcCrcInitialValue = 0xFFFF;
+
+    static constexpr uint16_t UipLinkMtu = 0x03;
+    static constexpr uint16_t UipLlhLen = 0xC021;
+    static constexpr uint16_t UipBufSize = UipLinkMtu + UipLlhLen;
+
+    static constexpr uint16_t PppRxBufferSize = 1024;
+
 
     class LCP {
     public:
@@ -90,7 +111,7 @@ namespace ES::Driver {
 
         }
         
-        void lcpInit() {
+        void init() {
             _lcpRetry = 0;
             _state = static_cast<uint16_t>(LcpState::Idle);
         }
@@ -340,6 +361,10 @@ namespace ES::Driver {
             }
         }
 
+        
+
+        private:
+
         uint16_t makeBadPacket(uint8_t *tptr, unsigned char *buffer) {
             /* write the config Rej packet we've built above, take on the header */
             _bptr = buffer;
@@ -366,7 +391,6 @@ namespace ES::Driver {
             _lpcTime = xTaskGetTickCount();
         }
 
-        private:
         uint16_t _pppTxMru = 0;
         std::function<void(size_t)> _callbackSendPacket;
         uint8_t *_bptr;
@@ -375,6 +399,152 @@ namespace ES::Driver {
         uint8_t _lcpRetry = 0;
         uint16_t _state = static_cast<uint16_t>(LcpState::Idle);
 
+    };
+
+    class PAP {
+        public:
+
+        enum class PapState : uint8_t {
+            None = 0x00,
+            PapTxUp = 0x01,
+            PapRxUp = 0x02,
+            PapRxAuthFail = 0x10,
+            PapTxAuthFail = 0x20,
+            PapRxTimeout = 0x80,
+            PapTxTimeout = 0x80
+        };
+
+        typedef struct PapPkt {
+            uint8_t code;
+            uint8_t id;
+            uint16_t len;
+            uint8_t data[1];	//dim2dim
+        } papPkt;
+
+        PAP (const std::function<void(size_t)>& callbackBadPacket) : _callbackSendPacket(callbackBadPacket) {
+
+        }
+        
+        void init() {
+            _papRetry = 0;			/* We reuse ppp_retry */
+            _state = static_cast<uint8_t>(PapState::None);
+        }
+
+
+
+
+        void PapTask(uint8_t* buffer, uint8_t &pppId) {
+
+            uint16_t t;
+            papPkt *pkt;
+
+            /* If LCP is up and PAP negotiated, try to bring up PAP */
+            if(!(_state & static_cast<uint8_t>(PapState::PapTxUp)) && !(_state & static_cast<uint8_t>(PapState::PapTxTimeout))) {
+                /* Do we need to send a PAP auth packet?
+                Check if we have a request pending*/
+                if(1 == papTimerTimeout(PapTimeout)) {
+                /* Check if we have a request pending */
+                /* t=get_seconds()-pap_tx_time;
+                if(	t > pap_timeout)
+                {
+                */
+                /* We need to send a PAP authentication request */
+      
+                /* Build a PAP request packet */
+                pkt = (papPkt *)buffer;		
+                
+                /* Configure-Request only here, write id */
+                pkt->code = ConfReq;
+                pkt->id = pppId;
+                _bptr = pkt->data;
+                
+                /* Write options */
+                t = strlen((const char*)_papUsername);
+                /* Write peer length */
+                *_bptr++ = (uint8_t)t;	
+                memcpy(_bptr, _papUsername, t);
+                _bptr+= t;
+
+
+                t = strlen((const char*)_papPassword);
+                *_bptr++ = (uint8_t)t;
+                memcpy(_bptr, _papPassword, t);
+                _bptr+= t;
+			
+            /* Write length */
+                t = _bptr - buffer;
+                /* length here -  code and ID +  */
+                pkt->len = ES::CommonTools::htons(t);	
+                
+                /* Send packet */
+                _callbackSendPacket(t);
+
+                /* Set timer */
+                papTimerSet();
+                
+                _papRetry++;
+
+                 /* Have we failed? */
+                if(_papRetry > PapRetryCount) 
+                {
+                    _state |= static_cast<uint8_t>(PapState::PapTxTimeout);	
+                    //reconnect
+                }
+                }
+            }
+        }
+
+        void papRecieve(uint8_t *buffer, uint16_t count){
+            _bptr = buffer;
+            uint8_t len;
+
+            switch(*_bptr++) {
+            case ConfReq:	
+            //bad
+                break;
+            case ConfAck:			/* config Ack */
+                /* Display message if debug */
+                len = *_bptr++;
+                *(_bptr + len) = 0;
+                _state |= static_cast<uint8_t>(PapState::PapTxUp);	
+                /* expire the timer to make things happen after a state change */
+                papTimerExpire();
+                break;
+            case ConfNak:
+                _state |= static_cast<uint8_t>(PapState::PapTxAuthFail);	
+                /* display message if debug */
+                len = *_bptr++;
+                *(_bptr + len)=0;
+                break;
+                }
+            }
+
+        private:
+
+            unsigned int papTimerTimeout(unsigned int x){
+                if((xTaskGetTickCount() - _papTime) > x)
+                    return 1;
+
+                return 0;
+            }
+
+            void papTimerSet()
+            { 
+                _papTime = xTaskGetTickCount();
+            }
+
+            void papTimerExpire()
+            {
+                _papTime = xTaskGetTickCount() - PapTimeout;
+            }
+
+            uint8_t _papUsername[PapUserNameSize];
+            uint8_t _papPassword[PapPasswordSize];
+            uint16_t _papTime = 0;
+            uint8_t *_bptr;
+            std::function<void(size_t)> _callbackSendPacket;
+            uint8_t _papRetry = 0;
+            uint8_t _state = static_cast<uint8_t>(PapState::None);
     };
 
     class IPCP {
@@ -404,83 +574,61 @@ namespace ES::Driver {
 
         uint8_t ipcpList[2] = {0x3, 0};	
 
-        void ipcp_task(uint8_t *buffer) {
-            uint16_t	t;
+        void ipcpTask(uint8_t *buffer, uint8_t &pppId) {
+            uint16_t t;
             ipcpPacket *pkt;
   
   // IPCP tx not up and hasn't timed out then lets see if we need to send a request
-  if(!(_state & static_cast<uint16_t>(IpcpState::IpcpTxUp)) && !(_state & static_cast<uint16_t>(IpcpState::IpcpTxTimeout))) 
-  {
-    // Have we timed out? (combide the timers?)
-    if(_ipcpRetry > IpcpRetryCount)
-    {
-    	_state |= static_cast<uint16_t>(IpcpState::IpcpTxTimeout);	
-      ppp_reconnect();
-      return;
-    }
+            if(!(_state & static_cast<uint16_t>(IpcpState::IpcpTxUp)) && !(_state & static_cast<uint16_t>(IpcpState::IpcpTxTimeout))) 
+            {
+                // Have we timed out? (combide the timers?)
+                if(_ipcpRetry > IpcpRetryCount)
+                {
+                    _state |= static_cast<uint16_t>(IpcpState::IpcpTxTimeout);	
+                    // reconnect
+                }
   
-    // Check if we have a request pending
-    if(IPCP_TIMER_timeout(IPCP_TIMEOUT * (ipcp_retry+1) * (ipcp_retry+1))) 
-    {
-      // No pending request, lets build one
-      pkt=(IPCPPKT *)buffer;		
+                // Check if we have a request pending
+                if(ipcpTimerTimeout(IpcpTimeout * (_ipcpRetry+1) * (_ipcpRetry+1))) 
+                {
+                // No pending request, lets build one
+                pkt=(ipcpPacket *)buffer;		
       
-      // Configure-Request only here, write id
-      pkt->code = CONF_REQ;
-      pkt->id = ppp_id;
-      bptr = pkt->data;       
+                // Configure-Request only here, write id
+                pkt->code = ConfReq;
+                pkt->id = pppId;
+                _bptr = pkt->data;       
 
-      // Write options, we want IP address, and DNS addresses if set.
-      // Write zeros for IP address the first time 
-      *bptr++ = IPCP_IPADDRESS;
-      *bptr++ = 0x6;
-      *bptr++ = pppif.ipaddr.u8[0];
-      *bptr++ = pppif.ipaddr.u8[1];
-      *bptr++ = pppif.ipaddr.u8[2];
-      *bptr++ = pppif.ipaddr.u8[3];
+                // Write options, we want IP address, and DNS addresses if set.
+                // Write zeros for IP address the first time 
+                *_bptr++ = IpcpIpAddress;
+                *_bptr++ = 0x6;
+                *_bptr++ = _pppIf.ipAddr.u8[0];
+                *_bptr++ = _pppIf.ipAddr.u8[1];
+                *_bptr++ = _pppIf.ipAddr.u8[2];
+                *_bptr++ = _pppIf.ipAddr.u8[3];
 
-     #ifdef IPCP_GET_PRI_DNS
-      if(!(ipcp_state & IPCP_PRI_DNS_BIT)) 
-      {
-	      // Write zeros for IP address the first time
-	      *bptr++ = IPCP_PRIMARY_DNS;
-	      *bptr++ = 0x6;
-	      *bptr++ = ((u8_t*)pri_dns_addr)[0];
-	      *bptr++ = ((u8_t*)pri_dns_addr)[1];
-	      *bptr++ = ((u8_t*)pri_dns_addr)[2];
-	      *bptr++ = ((u8_t*)pri_dns_addr)[3];
-      }
-     #endif
-     
-     #ifdef IPCP_GET_SEC_DNS
-      if(!(ipcp_state & IPCP_SEC_DNS_BIT)) 
-      {
-	      // Write zeros for IP address the first time
-	      *bptr++ = IPCP_SECONDARY_DNS;
-	      *bptr++ = 0x6;
-	      *bptr++ = ((u8_t*)sec_dns_addr)[0];
-	      *bptr++ = ((u8_t*)sec_dns_addr)[1];
-	      *bptr++ = ((u8_t*)sec_dns_addr)[2];
-	      *bptr++ = ((u8_t*)sec_dns_addr)[3];
-      }
-     #endif
-      // Write length
-      t = bptr - buffer;
-      // length here -  code and ID + 
-      pkt->len = htons(t);	
-      
-      LOG_PPP(8,"**Sending IPCP Request packet");
-      
-      // Send packet ahdlc_txz(procol,header,data,headerlen,datalen);
-      ahdlc_tx(IPCP, 0, buffer, 0, t);
+                // Write length
+                t = _bptr - buffer;
+                // length here -  code and ID + 
+                pkt->len = ES::CommonTools::htons(t);
+                
+                // Send packet ahdlc_txz(procol,header,data,headerlen,datalen);
+                _callbackSendPacket(t);
 
-      // Set timer
-      IPCP_TIMER_set();
-      // Inc retry
-      ipcp_retry++;
-    }
-  }
-}
+                // Set timer
+                ipcpTimerSet();
+                // Inc retry
+                _ipcpRetry++;
+                }
+            }
+        }
+
+        void init(void){
+            _state = static_cast<uint16_t>(IpcpState::Idle);
+            _ipcpRetry = 0;
+            _pppIf.ipAddr.u16[0] = _pppIf.ipAddr.u16[1] = _pppIf.netMask.u16[0] = _pppIf.netMask.u16[1]= 0;
+        }
     
         void ipcpRecieve(uint8_t* buffer, uint16_t count, uint8_t &pppId) {
             _bptr = buffer;
@@ -639,6 +787,8 @@ namespace ES::Driver {
             }
         }
 
+    private:
+
         uint16_t makeBadPacket(uint8_t *tptr, unsigned char *buffer) {
             /* write the config Rej packet we've built above, take on the header */
             _bptr = buffer;
@@ -651,18 +801,28 @@ namespace ES::Driver {
             return static_cast<uint16_t>(tptr - buffer);
         }
 
+        unsigned int ipcpTimerTimeout(unsigned int x){
+            if((xTaskGetTickCount() - _ipcpTime) > x)
+                return 1;
+
+            return 0;
+        }
         
         void ipcpTimerExpire()
         {
-            _ipcpTime = xTaskGetTickCount() - (IpcpTimeut * (_ipcpRetry+1) * (_ipcpRetry+1));
+            _ipcpTime = xTaskGetTickCount() - (IpcpTimeout * (_ipcpRetry+1) * (_ipcpRetry+1));
         }
+
+        void ipcpTimerSet()
+        {
+            _ipcpTime= xTaskGetTickCount();
+        }
+
 
         void uipFwRegister(struct UipFwNetif *netif){
             netif->next = _netifs;
             _netifs = netif;
         }
-
-    private:
 
         struct UipFwNetif *_netifs = NULL;
         struct UipFwNetif _pppIf{};
@@ -676,13 +836,6 @@ namespace ES::Driver {
     class PPP {
     public:
 
-        static constexpr uint8_t AhdlcTxOffline = 20;
-        static constexpr uint8_t LcpFlag = 0x7E;
-        static constexpr uint8_t Address = 0xFF;
-        static constexpr uint8_t Control = 0x03;
-        static constexpr uint16_t LcpProtocol = 0xC021;
-        static constexpr uint16_t ahdlcCrcInitialValue = 0xFFFF;
-
         enum class AhdlcFlag : uint8_t {
             None = 0,
             PppEscaped = 0x01,
@@ -693,7 +846,126 @@ namespace ES::Driver {
             PppAcfc = 0x20
         };
 
+        typedef __packed union {
+            uint32_t u32[(UipBufSize + 3) / 4];
+            uint8_t u8[UipBufSize];
+        } uipBuft;
+
         PPP(const std::function<void(size_t)>& pppSend) : _pppSend(pppSend) {
+        }
+
+        enum class PppFlags : uint8_t {
+            None = 0x00,
+            PppEscaped = 0x01,
+            PppRxReady = 0x02,
+            PppRxAsyncMap = 0x8,
+            PppTxAsyncMap = 0x8,
+            PppPfc = 0x10,
+            PppAcfc = 0x20,
+        };
+
+        enum class PppProtocols : uint16_t {
+            Lcp = 0xc021,
+            Pap = 0xc023,
+            Ipcp = 0x8021,
+            Ipv4 = 0x0021
+        };
+
+        enum class AhdlcBits : uint8_t {
+            None = 0x0,
+            AhdlcEscaped = 0x1,
+            AhdlcRxReady = 0x2,
+            AhdlcRxAsyncMap = 0x4,
+            AhdlcTxAsyncMap = 0x8,
+            AhdlcPfc = 0x10,
+            AhdlcAcfc = 0x20
+        };
+
+        void pppInit(void)
+        {
+            _pppFlags = static_cast<uint8_t>(PppFlags::None);
+            _pap.init();
+            _ipcp.init();
+            _lcp.init();
+            _pppFlags = static_cast<uint8_t>(PppFlags::None);
+                
+            ahdlcInit(_pppRxBuffer, PppRxBufferSize); 
+            ahdlcRxReady();
+        }
+
+        void ahdlcInit(uint8_t *buffer, uint16_t maxrxbuffersize) {
+            _ahdlcFlags = 0 | static_cast<uint8_t>(AhdlcBits::AhdlcRxAsyncMap);
+            _ahdlcRxBuffer = buffer;
+            ahdlc_max_rx_buffer_size = maxrxbuffersize;
+        }
+
+        void ahdlcRxReady() {
+            _ahdlcRxCount = 0;
+            _ahdlcRxCrc = 0xffff;
+            _ahdlcFlags |= static_cast<uint8_t>(AhdlcBits::AhdlcRxReady);
+        }
+
+        void pppConnect() {
+            _pap.init();
+            _ipcp.init();
+            _lcp.init();
+  
+        /* Enable PPP */
+            _pppFlags = static_cast<uint8_t>(PppFlags::PppRxReady);
+        }
+
+        void pppUpcall(uint16_t protocol, uint8_t *buffer, uint16_t len){
+
+            /* check to see if we have a packet waiting to be processed */
+            if(_pppFlags & static_cast<uint8_t>(PppFlags::PppRxReady)) {	
+                /* demux on protocol field */
+                PppProtocols pppProtocol = static_cast<PppProtocols>(protocol);
+                switch(pppProtocol) {
+                case PppProtocols::Lcp:	/* We must support some level of LCP */
+                    _lcp.lcpRecieve(buffer, len, _pppId);
+                    break;
+                case PppProtocols::Pap:	/* PAP should be compile in optional */
+                    _pap.papRecieve(buffer, len);
+                    break;
+                case PppProtocols::Ipcp:	/* IPCP should be compile in optional. */
+                    _ipcp.ipcpRecieve(buffer, len, _pppId);
+                    break;
+                case PppProtocols::Ipv4:	/* We must support IPV4 */
+                    memcpy(&_uipAlignedBuf.u8[UipLlhLen], buffer, len);
+                    _uipLen = len;
+                    break;
+                default:
+                    pppRejectProtocol(protocol, len);
+                break;
+                }
+            }
+        }
+
+        void pppRejectProtocol(uint16_t protocol, uint16_t count) {
+            uint16_t	i;
+            uint8_t *dptr, *sptr;
+            LCP::lcpPacket *pkt;
+                
+            /* first copy rejected packet back, start from end and work forward,
+                +++ Pay attention to buffer managment when updated. Assumes fixed
+                PPP blocks. */
+            if((count + 6) > PppRxBufferSize) {
+                /* This is a fatal error +++ do somthing about it. */
+                return;
+            }
+            dptr = _bufferChar + count + 6;
+            sptr = _bufferChar + count;
+            for(i = 0; i < count; ++i) {
+                *dptr-- = *sptr--;
+            }
+
+            pkt = (LCP::lcpPacket *)_bufferChar;
+            pkt->code = ProtRej;		/* Write Conf_rej */
+            /*pkt->id = tid++;*/			/* write tid */
+            pkt->len = ES::CommonTools::htons(count + 6);
+            *((uint16_t *)(&pkt->data[0])) = ES::CommonTools::htons(protocol);
+
+            sendLcp((uint16_t)(count + 6));
         }
 
         unsigned char* getLcpPacket(size_t &packetLength) {
@@ -732,6 +1004,10 @@ namespace ES::Driver {
         }
 
         void sendIpcp(size_t size) {
+            _pppSend(_n);
+        }
+
+        void sendPap(size_t size) {
             _pppSend(_n);
         }
 
@@ -780,18 +1056,29 @@ namespace ES::Driver {
             _ahdlcTxCrc = ((crcValue >> 8) ^ b);
         }
 
+        uint16_t ahdlc_max_rx_buffer_size;
+        uint8_t* _ahdlcRxBuffer;
+        uint8_t _pppRxBuffer[PppRxBufferSize];
+        uint16_t _ahdlcRxCount = 0;
+        uint16_t _ahdlcRxCrc = 0;
+        uint8_t _ahdlcFlags = static_cast<uint8_t>(AhdlcBits::None);
+        uint16_t _uipLen = 0;
+        uipBuft _uipAlignedBuf{};
+        uint8_t _pppFlags = static_cast<uint8_t>(PppFlags::None);
         uint8_t _pppId = 0;
         std::function<void(size_t)> _lcpCallback = std::bind(&PPP::sendLcp, this, std::placeholders::_1);
         std::function<void(size_t)> _ipcpCallback = std::bind(&PPP::sendIpcp, this, std::placeholders::_1);
+        std::function<void(size_t)> _papCallback = std::bind(&PPP::sendPap, this, std::placeholders::_1);
         std::function<void(size_t)> _pppSend;
         size_t _n = 0;
-        uint8_t _ahdlcFlags = static_cast<uint8_t>(AhdlcFlag::None);
         uint16_t _ahdlcTxCrc = 0;
         uint8_t _ahdlcTxOffline = 0;
         uint8_t _buffer[32];
         unsigned char _bufferChar[128];
         LCP _lcp{_lcpCallback};
-        LCP _ipcp{_ipcpCallback};
+        IPCP _ipcp{_ipcpCallback};
+        PAP _pap{_papCallback};
+
     };
 
 }
