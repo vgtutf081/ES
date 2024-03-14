@@ -1,17 +1,20 @@
 #pragma once
-
+#include "ThreadFreeRtos.h"
+#include "Semaphore.h"
 #include "task.h"
 #include "CommonTools.h"
-
+#include "SEGGER_RTT.h"
 #include <cstdint>
 #include <functional>
+#include <string>
+#include <array>
 
 #define ALIGN_4  __align(4)
 
 namespace ES::Driver {
 
     typedef union UipIpaddrt {
-        uint8_t  u8[4];			/* Initializer, must come first!!! */
+        uint8_t  u8[4] = {0};			/* Initializer, must come first!!! */
         uint16_t u16[2];
         uint32_t u32;
     } uip_ip4addr_t;
@@ -64,17 +67,21 @@ namespace ES::Driver {
     static constexpr uint8_t PapRetryCount = 3;
 
     static constexpr uint8_t AhdlcTxOffline = 20;
-    static constexpr uint8_t LcpFlag = 0x7E;
+    static constexpr uint8_t StartFlag = 0x7E;
     static constexpr uint8_t Address = 0xFF;
     static constexpr uint8_t Control = 0x03;
     static constexpr uint16_t LcpProtocol = 0xC021;
+    static constexpr uint16_t PapProtocol = 0xC023;
+    static constexpr uint16_t IpcpProtocol =	0x8021;
     static constexpr uint16_t ahdlcCrcInitialValue = 0xFFFF;
 
     static constexpr uint16_t UipLinkMtu = 0x03;
     static constexpr uint16_t UipLlhLen = 0xC021;
     static constexpr uint16_t UipBufSize = UipLinkMtu + UipLlhLen;
 
-    static constexpr uint16_t PppRxBufferSize = 1024;
+    static constexpr uint16_t PppRxBufferSize = 512;
+
+    static constexpr uint16_t CrcGoodValue = 0xf0b8;
 
 
     class LCP {
@@ -107,7 +114,7 @@ namespace ES::Driver {
             LcpTxTimeout = 0x80
         };
 
-        LCP(const std::function<void(size_t)>& callbackBadPacket) : _callbackSendPacket(callbackBadPacket) {
+        LCP(const std::function<void(size_t, uint8_t*)>& callbackBadPacket) : _callbackSendPacket(callbackBadPacket) {
 
         }
         
@@ -116,27 +123,34 @@ namespace ES::Driver {
             _state = static_cast<uint16_t>(LcpState::Idle);
         }
 
-        void lcpTask(uint8_t *buffer, size_t &t)  {
-            //if(!(_state & static_cast<uint16_t>(LcpState::LcpTxUp)) && !(_state & static_cast<uint16_t>(LcpState::LcpTxTimeout))) {
+        uint16_t getState() {
+            return _state;
+        }
+        
+
+        void task(uint8_t *buffer)  {
+            if(!(_state & static_cast<uint16_t>(LcpState::LcpTxUp)) && !(_state & static_cast<uint16_t>(LcpState::LcpTxTimeout))) {
     /* Check if we have a request pending */
-                //if(1 == lpcTimerTimeout()) {
+                if(1 == lpcTimerTimeout()) {
+                    uint8_t *bptr;
+                    uint16_t t = 0;
                     _pkt = (lcpPacket *)buffer;	
 
                     _pkt->code = ConfReq;
                     _pkt->id = 0;
                     
-                    _bptr = _pkt->data;
+                    bptr = _pkt->data;
 
-                    *_bptr++ = LpcAccm;
-                    *_bptr++ = 0x6;
-                    *_bptr++ = 0xff;
-                    *_bptr++ = 0xff;
-                    *_bptr++ = 0xff;
-                    *_bptr++ = 0xff;
+                    *bptr++ = LpcAccm;
+                    *bptr++ = 0x6;
+                    *bptr++ = 0xff;
+                    *bptr++ = 0xff;
+                    *bptr++ = 0xff;
+                    *bptr++ = 0xff;
 
-                    t = _bptr - buffer;
+                    t = bptr - buffer;
                     _pkt->len = ES::CommonTools::htons(t);
-
+                    _callbackSendPacket(t, buffer);
                     lpcTimerSet();
                     _lcpRetry++;
 
@@ -146,189 +160,243 @@ namespace ES::Driver {
                         //ppp_reconnect();
                         //TODO
                     }
-                //}
-            //}
-        }
-
-        void lcpRecieve(uint8_t* buffer, uint16_t count, uint8_t &pppId) {
-            _bptr = buffer;
-            uint8_t *tptr;
-            uint8_t error = 0;
-            uint16_t len, j;
-            uint8_t packetSize;
-            switch(*_bptr++) {
-            case ConfReq:
-                _bptr++;
-                len = (*_bptr++ << 8);
-                len |= *_bptr++;
-                packetSize = scanPacket(buffer, _bptr, (uint16_t)(len-4));
-                if(packetSize) {
-                    _callbackSendPacket(packetSize);
-                }
-                else {
-                          /* lets try to implement what peer wants */
-                    tptr = _bptr = buffer;
-                    _bptr += 4;			/* skip code, id, len */
-                    error = 0;
-                          /* first scan for unknown values */
-                    while(_bptr < buffer+len) {
-                        switch(*_bptr++) {
-                        case LpcMru:	/* mru */
-                            j = *_bptr++;
-                            j -= 2;
-                            if(j == 2) {
-                                _pppTxMru = ((int)*_bptr++) << 8;
-                                _pppTxMru |= *_bptr++;
-                            }
-                            else {
-                                //not ok
-                            }
-                        break;
-                        case LpcAccm:	/*		*/
-                            _bptr++;		/* skip length */	
-                            j = *_bptr++;
-                            j += *_bptr++;
-                            j += *_bptr++;
-                            j += *_bptr++;
-                            if(j == 0) {
-                                // ok
-                            } else if(j!=0) {
-                                // ok
-                            } else {
-                                /*
-                                * fail we only support default or all zeros
-                                */
-                                error = 1;
-                                *tptr++ = LpcAccm;
-                                *tptr++ = 0x6;
-                                *tptr++ = 0;
-                                *tptr++ = 0;
-                                *tptr++ = 0;
-                                *tptr++ = 0;
-                            }
-                        break;
-                        case LpcAuth:
-                            _bptr++;
-                            if((*_bptr++ == 0xc0) && (*_bptr++ == 0x23)) {
-                                /* negotiate PAP */
-
-                                _state |= static_cast<uint16_t>(LcpState::LcpRxAuth);;	
-
-                            } else {
-                                /* we only support PAP */
-                                error = 1;
-                                *tptr++ = LpcAuth;
-                                *tptr++ = 0x4;
-                                *tptr++ = 0xc0;
-                                *tptr++ = 0x23;
-                            }
-                        break;
-                        case LpcMagicNumber:
-                            /*
-                            * Compair incoming number to our number (not implemented)
-                            */
-                            _bptr++;		/* for now just dump */
-                            _bptr++;
-                            _bptr++;
-                            _bptr++;
-                            _bptr++;
-                            break;
-                            case LpcPfc:
-                            _bptr++;
-                            /*tflag|=PPP_PFC;*/
-                            break;
-                            case LpcAcfc:
-                            _bptr++;
-                            /*tflag|=PPP_ACFC;*/
-                            break;
-        
-                        }
-                        if(error) {
-                        /* write the config NAK packet we've built above, take on the header */
-                            _bptr = buffer;
-                            *_bptr++ = ConfNak;		/* Write Conf_rej */
-                            *_bptr++;/*tptr++;*/		/* skip over ID */
-
-                            /* Write new length */
-                            *_bptr++ = 0;
-                            *_bptr = tptr - buffer;
-
-                            /* write the reject frame */
-                            // Send packet ahdlc_txz(procol,header,data,headerlen,datalen);				
-                            _callbackSendPacket(static_cast<uint16_t>(tptr-buffer));                            
-                        } 
-                        else {
-                            /*
-                            * If we get here then we are OK, lets send an ACK and tell the rest
-                            * of our modules our negotiated config.
-                            */
-                            _bptr = buffer;
-                            *_bptr++ = ConfAck;		/* Write Conf_ACK */
-                            _bptr++;				/* Skip ID (send same one) */
-                            /*
-                            * Set stuff
-                            */
-        
-                            /* write the ACK frame */
-                            /* Send packet ahdlc_txz(procol,header,data,headerlen,datalen);	*/
-                            _callbackSendPacket(count);
-                            _state |= static_cast<uint16_t>(LcpState::LcpRxUp);
-                            /* expire the timer to make things happen after a state change */
-                            /*timer_expire();*/
-                        
-                        }
-                    }
-                    break;    
-                case ConfAck:			/* config Ack   Anytime we do an ack reset the timer to force send. */
-                        /* check that ID matches one sent */
-                    if(*_bptr++ == pppId) {	
-                        /* Change state to PPP up. */
-                        /* copy negotiated values over */
-                        
-                        _state |= static_cast<uint16_t>(LcpState::LcpTxUp);		
-                        
-                        /* expire the timer to make things happen after a state change */
-                        lcpTimerExpire();
-                    }
-                    else {
-                        //bad
-                    }
-                    break;
-                case ConfNak:			/* Config Nack */
-                    pppId++;
-                    break;
-                case ConfRej:			/* Config Reject */
-                    pppId++;
-                    break;
-                case TermReq:			/* Terminate Request */
-                    _bptr = buffer;
-                    *_bptr++ = TermAck;			/* Write TERM_ACK */
-                    /* write the reject frame */
-                    /* Send packet ahdlc_txz(procol,header,data,headerlen,datalen); */
-                    _callbackSendPacket(count);
-                    _state &= ~static_cast<uint16_t>(LcpState::LcpTxUp);		
-                    _state |= static_cast<uint16_t>(LcpState::LcpTermPeer);	
-                    break;
-                case TermAck:
-                    break;
-                default:
-                    break;         
                 }
             }
         }
 
+        void lcpRecieve(uint8_t* buffer, uint16_t count, uint8_t &pppId) {
+            uint8_t *bptr = buffer, *tptr;
+            uint8_t error = 0;
+            uint8_t id;
+            uint16_t len, j;
+            size_t packetSize = 0;
+
+
+            switch(*bptr++) {
+            case ConfReq:			/* config request */
+                /* parce request and see if we can ACK it */
+                id = *bptr;
+                bptr++;
+                len = (*bptr++ << 8);
+                len |= *bptr++;
+
+                /*len -= 2;*/
+                char str[124];
+                sprintf(str, "received [LCP Config Request id %u",id);
+                SEGGER_RTT_WriteString(0, str);
+                packetSize = scanPacket(buffer, bptr, (uint16_t)(len-4));
+                if(packetSize) {
+                    SEGGER_RTT_WriteString(0," options were rejected");
+                    _callbackSendPacket(packetSize, buffer);
+                }
+                else {
+                /* lets try to implement what peer wants */
+                tptr = bptr = buffer;
+                bptr += 4;			/* skip code, id, len */
+                error = 0;
+                /* first scan for unknown values */
+                while(bptr < buffer+len) {
+                switch(*bptr++) {
+                case LpcMru:	/* mru */
+                j = *bptr++;
+                j -= 2;
+                if(j == 2) {
+                    _pppTxMru = ((int)*bptr++) << 8;
+                    _pppTxMru |= *bptr++;
+                    sprintf(str, "<mru %d> ",_pppTxMru);
+                    SEGGER_RTT_WriteString(0, str);
+                } else {
+                    SEGGER_RTT_WriteString(0,"<mru ??> ");
+                }
+                break;
+                case LpcAccm:	/*		*/
+                bptr++;		/* skip length */	
+                j = *bptr++;
+                j += *bptr++;
+                j += *bptr++;
+                j += *bptr++;
+                if(j==0) {
+                    // ok
+                    sprintf(str, "<asyncmap sum=0x%04x>",j);
+                    SEGGER_RTT_WriteString(0, str);
+                    //ahdlc_flags |= PPP_TX_ASYNC_MAP;
+                } else if(j!=0) {
+                    // ok
+                    sprintf(str, "<asyncmap sum=0x%04x>, assume 0xffffffff",j);
+                    SEGGER_RTT_WriteString(0, str);
+                } else {
+                    /*
+                    * fail we only support default or all zeros
+                    */
+                    SEGGER_RTT_WriteString(8,"We only support default or all zeros for ACCM ");
+                    error = 1;
+                    *tptr++ = LpcAccm;
+                    *tptr++ = 0x6;
+                    *tptr++ = 0;
+                    *tptr++ = 0;
+                    *tptr++ = 0;
+                    *tptr++ = 0;
+                }
+                break;
+                case LpcAuth:
+                bptr++;
+                if((*bptr++ == 0xc0) && (*bptr++ == 0x23)) {
+                    /* negotiate PAP */
+                //  if (strlen((const char*)pap_username) > 0) {
+            //	    if (strlen((const char*)pap_username) >= 0) {
+                    SEGGER_RTT_WriteString(0,"<auth pap> ");
+                    _state |= static_cast<uint16_t>(LcpState::LcpRxAuth);	
+            /*	    } else {
+                    LOG_PPP(8,"<rej auth pap> ");
+                    
+                    *tptr++ = CONF_REJ;
+                    *tptr++;	// Keep ID
+                    *tptr++ = 0;
+                    *tptr++ = 8;
+                    *tptr++ = LPC_AUTH;
+                    *tptr++ = 0x4;
+                    *tptr++ = 0xc0;
+                    *tptr++ = 0x23;
+                    ahdlc_tx(LCP, 0, buffer, 0, (u16_t)(tptr-buffer));
+                    return;
+                    }
+            */
+                } else {
+                    /* we only support PAP */
+                    SEGGER_RTT_WriteString(0,"<auth ? ?>");
+                    error = 1;
+                    *tptr++ = LpcAuth;
+                    *tptr++ = 0x4;
+                    *tptr++ = 0xc0;
+                    *tptr++ = 0x23;
+                }
+                break;
+                case LpcMagicNumber:
+                SEGGER_RTT_WriteString(0,"<magic > ");
+                /*
+                * Compair incoming number to our number (not implemented)
+                */
+                bptr++;		/* for now just dump */
+                bptr++;
+                bptr++;
+                bptr++;
+                bptr++;
+                break;
+                case LpcPfc:
+                bptr++;
+                SEGGER_RTT_WriteString(0,"<pcomp> ");
+                /*tflag|=PPP_PFC;*/
+                break;
+                case LpcAcfc:
+                bptr++;
+                SEGGER_RTT_WriteString(0,"<accomp> ");
+                /*tflag|=PPP_ACFC;*/
+                break;
+                
+                }
+                }
+                /* Error? if we we need to send a config Reject ++++ this is good for a subroutine */
+                if(error) {
+                /* write the config NAK packet we've built above, take on the header */
+                bptr = buffer;
+                *bptr++ = ConfNak;		/* Write Conf_rej */
+                *bptr++ = id;/*tptr++;*/		/* skip over ID */
+
+                /* Write new length */
+                *bptr++ = 0;
+                *bptr = tptr - buffer;
+
+                /* write the reject frame */
+                SEGGER_RTT_WriteString(0,"Writing NAK frame ");
+                // Send packet ahdlc_txz(procol,header,data,headerlen,datalen);				
+                _callbackSendPacket((uint16_t)(tptr-buffer), buffer);
+                SEGGER_RTT_WriteString(0,"- end NAK Write frame");
+                
+                } else {
+                /*
+                * If we get here then we are OK, lets send an ACK and tell the rest
+                * of our modules our negotiated config.
+                */
+                SEGGER_RTT_WriteString(0,"Send ACK!");
+                bptr = buffer;
+                *bptr++ = ConfAck;		/* Write Conf_ACK */
+                bptr++;				/* Skip ID (send same one) */
+                /*
+                * Set stuff
+                */
+                /*ppp_flags|=tflag;*/
+                
+                /* write the ACK frame */
+                
+                /* Send packet ahdlc_txz(procol,header,data,headerlen,datalen);	*/
+                _callbackSendPacket(count /*bptr-buffer*/, buffer);
+                SEGGER_RTT_WriteString(8,"Writing ACK frame - end ACK Write frame");
+                _state |= static_cast<uint16_t>(LcpState::LcpRxUp);		
+                
+                /* expire the timer to make things happen after a state change */
+                /*timer_expire();*/
+                
+                }
+                }
+                break;
+            case ConfAck:			/* config Ack   Anytime we do an ack reset the timer to force send. */
+                SEGGER_RTT_WriteString(0,"LCP-ACK - ");
+                /* check that ID matches one sent */
+                if(*bptr++ == pppId) {	
+                    /* Change state to PPP up. */
+                    sprintf(str, ">>>>>>>> good ACK id up! %d",pppId);
+                    SEGGER_RTT_WriteString(0, str);
+                    /* copy negotiated values over */
+                    
+                    _state |= static_cast<uint16_t>(LcpState::LcpTxUp);		
+                    
+                    /* expire the timer to make things happen after a state change */
+                    lcpTimerExpire();
+                }
+                else
+                sprintf(str, "*************++++++++++ bad id %d",pppId);
+                SEGGER_RTT_WriteString(0, str);
+                break;
+            case ConfNak:			/* Config Nack */
+                SEGGER_RTT_WriteString(0,"LCP-CONF NAK");
+                pppId++;
+                break;
+            case ConfRej:			/* Config Reject */
+                SEGGER_RTT_WriteString(0,"LCP-CONF REJ");
+                pppId++;
+                break;
+            case TermReq:			/* Terminate Request */
+                SEGGER_RTT_WriteString(0,"LCP-TERM-REQ -");
+                bptr = buffer;
+                *bptr++ = TermAck;			/* Write TERM_ACK */
+                /* write the reject frame */
+                SEGGER_RTT_WriteString(0,"Writing TERM_ACK frame ");
+                /* Send packet ahdlc_txz(procol,header,data,headerlen,datalen); */
+                _callbackSendPacket(count, buffer);
+                _state &= ~static_cast<uint16_t>(LcpState::LcpTxUp);	
+                _state |= static_cast<uint16_t>(LcpState::LcpTermPeer);
+                break;
+            case TermAck:
+                SEGGER_RTT_WriteString(0,"LCP-TERM ACK");
+                break;
+            default:
+                break;
+            }
+        }
+
         uint16_t scanPacket(uint8_t *buffer, uint8_t *options, uint16_t len) {
+            uint8_t *bptr;
             uint8_t *tlist;
             uint8_t *tptr;
             uint8_t bad = 0;
             uint8_t i, j, good;
 
-            _bptr = tptr = options;
+            bptr = tptr = options;
             /* scan through the packet and see if it has any unsupported codes */
-            while(_bptr < options + len) {
+            while(bptr < options + len) {
                 /* get code and see if it matches somwhere in the list, if not
                 we don't support it */
-                i = *_bptr++;
+                i = *bptr++;
                 
                 tlist = lcpList;
                 good = 0;
@@ -342,13 +410,13 @@ namespace ES::Driver {
                 /* we don't understand it, write it back */
                     bad = 1;
                     *tptr++ = i;
-                    j = *tptr++ = *_bptr++;
+                    j = *tptr++ = *bptr++;
                     for(i = 0; i < j - 2; ++i) {
-                        *tptr++ = *_bptr++;
+                        *tptr++ = *bptr++;
                     }
                 } else {
                 /* advance over to next option */
-                    _bptr += *_bptr - 1;
+                    bptr += *bptr - 1;
                 }
             }
             
@@ -367,11 +435,12 @@ namespace ES::Driver {
 
         uint16_t makeBadPacket(uint8_t *tptr, unsigned char *buffer) {
             /* write the config Rej packet we've built above, take on the header */
-            _bptr = buffer;
-            *_bptr++ = ConfRej;		/* Write Conf_rej */
-            _bptr++;			/* skip over ID */
-            *_bptr++ = 0;
-            *_bptr = tptr - buffer;
+            uint8_t *bptr;
+            bptr = buffer;
+            *bptr++ = ConfRej;		/* Write Conf_rej */
+            bptr++;			/* skip over ID */
+            *bptr++ = 0;
+            *bptr = tptr - buffer;
             /* length right here? */
             
             return static_cast<uint16_t>(tptr - buffer);
@@ -392,8 +461,7 @@ namespace ES::Driver {
         }
 
         uint16_t _pppTxMru = 0;
-        std::function<void(size_t)> _callbackSendPacket;
-        uint8_t *_bptr;
+        std::function<void(size_t, uint8_t*)> _callbackSendPacket;
         lcpPacket *_pkt;
         uint32_t _lpcTime = 0;
         uint8_t _lcpRetry = 0;
@@ -421,7 +489,7 @@ namespace ES::Driver {
             uint8_t data[1];	//dim2dim
         } papPkt;
 
-        PAP (const std::function<void(size_t)>& callbackBadPacket) : _callbackSendPacket(callbackBadPacket) {
+        PAP (const std::function<void(size_t, uint8_t*)>& callbackBadPacket) : _callbackSendPacket(callbackBadPacket) {
 
         }
         
@@ -430,11 +498,12 @@ namespace ES::Driver {
             _state = static_cast<uint8_t>(PapState::None);
         }
 
+        uint16_t getState() {
+            return _state;
+        }
 
-
-
-        void PapTask(uint8_t* buffer, uint8_t &pppId) {
-
+        void task(uint8_t* buffer, uint8_t &pppId) {
+            uint8_t *bptr;
             uint16_t t;
             papPkt *pkt;
 
@@ -456,28 +525,28 @@ namespace ES::Driver {
                 /* Configure-Request only here, write id */
                 pkt->code = ConfReq;
                 pkt->id = pppId;
-                _bptr = pkt->data;
+                bptr = pkt->data;
                 
                 /* Write options */
                 t = strlen((const char*)_papUsername);
                 /* Write peer length */
-                *_bptr++ = (uint8_t)t;	
-                memcpy(_bptr, _papUsername, t);
-                _bptr+= t;
+                *bptr++ = (uint8_t)t;	
+                memcpy(bptr, _papUsername, t);
+                bptr+= t;
 
 
                 t = strlen((const char*)_papPassword);
-                *_bptr++ = (uint8_t)t;
-                memcpy(_bptr, _papPassword, t);
-                _bptr+= t;
+                *bptr++ = (uint8_t)t;
+                memcpy(bptr, _papPassword, t);
+                bptr+= t;
 			
             /* Write length */
-                t = _bptr - buffer;
+                t = bptr - buffer;
                 /* length here -  code and ID +  */
                 pkt->len = ES::CommonTools::htons(t);	
                 
                 /* Send packet */
-                _callbackSendPacket(t);
+                _callbackSendPacket(t, buffer);
 
                 /* Set timer */
                 papTimerSet();
@@ -495,17 +564,18 @@ namespace ES::Driver {
         }
 
         void papRecieve(uint8_t *buffer, uint16_t count){
-            _bptr = buffer;
+            uint8_t *bptr;
+            bptr = buffer;
             uint8_t len;
 
-            switch(*_bptr++) {
+            switch(*bptr++) {
             case ConfReq:	
             //bad
                 break;
             case ConfAck:			/* config Ack */
                 /* Display message if debug */
-                len = *_bptr++;
-                *(_bptr + len) = 0;
+                len = *bptr++;
+                *(bptr + len) = 0;
                 _state |= static_cast<uint8_t>(PapState::PapTxUp);	
                 /* expire the timer to make things happen after a state change */
                 papTimerExpire();
@@ -513,8 +583,8 @@ namespace ES::Driver {
             case ConfNak:
                 _state |= static_cast<uint8_t>(PapState::PapTxAuthFail);	
                 /* display message if debug */
-                len = *_bptr++;
-                *(_bptr + len)=0;
+                len = *bptr++;
+                *(bptr + len)=0;
                 break;
                 }
             }
@@ -538,11 +608,10 @@ namespace ES::Driver {
                 _papTime = xTaskGetTickCount() - PapTimeout;
             }
 
-            uint8_t _papUsername[PapUserNameSize];
-            uint8_t _papPassword[PapPasswordSize];
+            uint8_t _papUsername[PapUserNameSize] = {0};
+            uint8_t _papPassword[PapPasswordSize] = {0};
             uint16_t _papTime = 0;
-            uint8_t *_bptr;
-            std::function<void(size_t)> _callbackSendPacket;
+            std::function<void(size_t, uint8_t*)> _callbackSendPacket;
             uint8_t _papRetry = 0;
             uint8_t _state = static_cast<uint8_t>(PapState::None);
     };
@@ -568,13 +637,14 @@ namespace ES::Driver {
             uint8_t data[1];	//dim2dim
         } ipcpPacket;
 
-        IPCP (const std::function<void(size_t)>& callbackBadPacket) : _callbackSendPacket(callbackBadPacket) {
+        IPCP (const std::function<void(size_t, uint8_t*)>& callbackBadPacket) : _callbackSendPacket(callbackBadPacket) {
 
         }
 
         uint8_t ipcpList[2] = {0x3, 0};	
 
-        void ipcpTask(uint8_t *buffer, uint8_t &pppId) {
+        void task(uint8_t *buffer, uint8_t &pppId) {
+            uint8_t *bptr;
             uint16_t t;
             ipcpPacket *pkt;
   
@@ -582,14 +652,14 @@ namespace ES::Driver {
             if(!(_state & static_cast<uint16_t>(IpcpState::IpcpTxUp)) && !(_state & static_cast<uint16_t>(IpcpState::IpcpTxTimeout))) 
             {
                 // Have we timed out? (combide the timers?)
-                if(_ipcpRetry > IpcpRetryCount)
+                if(ipcpRetry > IpcpRetryCount)
                 {
                     _state |= static_cast<uint16_t>(IpcpState::IpcpTxTimeout);	
                     // reconnect
                 }
   
                 // Check if we have a request pending
-                if(ipcpTimerTimeout(IpcpTimeout * (_ipcpRetry+1) * (_ipcpRetry+1))) 
+                if(ipcpTimerTimeout(IpcpTimeout * (ipcpRetry+1) * (ipcpRetry+1))) 
                 {
                 // No pending request, lets build one
                 pkt=(ipcpPacket *)buffer;		
@@ -597,59 +667,60 @@ namespace ES::Driver {
                 // Configure-Request only here, write id
                 pkt->code = ConfReq;
                 pkt->id = pppId;
-                _bptr = pkt->data;       
+                bptr = pkt->data;       
 
                 // Write options, we want IP address, and DNS addresses if set.
                 // Write zeros for IP address the first time 
-                *_bptr++ = IpcpIpAddress;
-                *_bptr++ = 0x6;
-                *_bptr++ = _pppIf.ipAddr.u8[0];
-                *_bptr++ = _pppIf.ipAddr.u8[1];
-                *_bptr++ = _pppIf.ipAddr.u8[2];
-                *_bptr++ = _pppIf.ipAddr.u8[3];
+                *bptr++ = IpcpIpAddress;
+                *bptr++ = 0x6;
+                *bptr++ = _pppIf.ipAddr.u8[0];
+                *bptr++ = _pppIf.ipAddr.u8[1];
+                *bptr++ = _pppIf.ipAddr.u8[2];
+                *bptr++ = _pppIf.ipAddr.u8[3];
 
                 // Write length
-                t = _bptr - buffer;
+                t = bptr - buffer;
                 // length here -  code and ID + 
                 pkt->len = ES::CommonTools::htons(t);
                 
                 // Send packet ahdlc_txz(procol,header,data,headerlen,datalen);
-                _callbackSendPacket(t);
+                _callbackSendPacket(t, buffer);
 
                 // Set timer
                 ipcpTimerSet();
                 // Inc retry
-                _ipcpRetry++;
+                ipcpRetry++;
                 }
             }
         }
 
         void init(void){
             _state = static_cast<uint16_t>(IpcpState::Idle);
-            _ipcpRetry = 0;
+            ipcpRetry = 0;
             _pppIf.ipAddr.u16[0] = _pppIf.ipAddr.u16[1] = _pppIf.netMask.u16[0] = _pppIf.netMask.u16[1]= 0;
         }
     
         void ipcpRecieve(uint8_t* buffer, uint16_t count, uint8_t &pppId) {
-            _bptr = buffer;
+            uint8_t *bptr;
+            bptr = buffer;
             uint16_t len;
             size_t packetSize;
 	
-            switch(*_bptr++) {
+            switch(*bptr++) {
             case ConfReq:
       // parce request and see if we can ACK it
-                ++_bptr;
-                len = (*_bptr++ << 8);
-                len |= *_bptr++;
-                packetSize = scanPacket(buffer, _bptr, (uint16_t)(len - 4));
+                ++bptr;
+                len = (*bptr++ << 8);
+                len |= *bptr++;
+                packetSize = scanPacket(buffer, bptr, (uint16_t)(len - 4));
                 if(packetSize) {
-                    _callbackSendPacket(packetSize);
+                    _callbackSendPacket(packetSize, buffer);
                 }
                 else {
-                    if(IpcpAddress == *_bptr++) {
+                    if(IpcpAddress == *bptr++) {
 	        // dump length
-	                    ++_bptr;
-	                    _bptr += 4;
+	                    ++bptr;
+	                    bptr += 4;
                     }
                     else 
                     {
@@ -659,14 +730,14 @@ namespace ES::Driver {
                 // of our modules our negotiated config.
                 
                 _state |= static_cast<uint16_t>(IpcpState::IpcpRxUp);
-                _bptr = buffer;
-                *_bptr++ = ConfAck;		// Write Conf_ACK 
-                _bptr++;				        // Skip ID (send same one) 
+                bptr = buffer;
+                *bptr++ = ConfAck;		// Write Conf_ACK 
+                bptr++;				        // Skip ID (send same one) 
         
         //Set stuff
 	
         // write the ACK frame
-                _callbackSendPacket(count);
+                _callbackSendPacket(count, buffer);
                 }
                 break;
             case ConfAck:			// config Ack
@@ -675,11 +746,11 @@ namespace ES::Driver {
                 // Dump the ID and get the length.
                 
                 // dump the ID
-                _bptr++;
+                bptr++;
 
                 // get the length
-                len = (*_bptr++ << 8);
-                len |= *_bptr++;
+                len = (*bptr++ << 8);
+                len |= *bptr++;
         
                 _state |= static_cast<uint16_t>(IpcpState::IpcpTxUp);
 		
@@ -688,23 +759,23 @@ namespace ES::Driver {
                 break;
             case ConfNak:			// Config Nack
       // dump the ID 
-                _bptr++;
+                bptr++;
       // get the length 
-                len = (*_bptr++ << 8);
-                len |= *_bptr++;
+                len = (*bptr++ << 8);
+                len |= *bptr++;
 
       // Parse ACK and set data
-                while(_bptr < buffer + len) 
+                while(bptr < buffer + len) 
                 {
-                    switch(*_bptr++) 
+                    switch(*bptr++) 
                     {
                         case IpcpIpAddress:
 	                    // dump length
-                        _bptr++;
-                        _pppIf.ipAddr.u8[0] = *_bptr++;
-                        _pppIf.ipAddr.u8[1] = *_bptr++;
-                        _pppIf.ipAddr.u8[2] = *_bptr++;
-                        _pppIf.ipAddr.u8[3] = *_bptr++;
+                        bptr++;
+                        _pppIf.ipAddr.u8[0] = *bptr++;
+                        _pppIf.ipAddr.u8[1] = *bptr++;
+                        _pppIf.ipAddr.u8[2] = *bptr++;
+                        _pppIf.ipAddr.u8[3] = *bptr++;
                         uipFwRegister(&_pppIf);
                         break;
                     default:
@@ -719,17 +790,17 @@ namespace ES::Driver {
                 /* Remove the offending options*/
                 pppId++;
                 /* dump the ID */
-                _bptr++;
+                bptr++;
                 /* get the length */
-                len = (*_bptr++ << 8);
-                len |= *_bptr++;
+                len = (*bptr++ << 8);
+                len |= *bptr++;
 
                 /* Parse ACK and set data */
-                while(_bptr < buffer + len) {
-                    switch(*_bptr++) {
+                while(bptr < buffer + len) {
+                    switch(*bptr++) {
                         case IpcpIpAddress:
                         _state |= static_cast<uint16_t>(IpcpState::IpcpIpBit);
-                        _bptr += 5;
+                        bptr += 5;
                         break;
                         default:
                         asm("nop"); //unknown
@@ -744,17 +815,18 @@ namespace ES::Driver {
             }
 
         uint16_t scanPacket(uint8_t *buffer, uint8_t *options, uint16_t len) {
+            uint8_t *bptr;
             uint8_t *tlist;
             uint8_t *tptr;
             uint8_t bad = 0;
             uint8_t i, j, good;
 
-            _bptr = tptr = options;
+            bptr = tptr = options;
             /* scan through the packet and see if it has any unsupported codes */
-            while(_bptr < options + len) {
+            while(bptr < options + len) {
                 /* get code and see if it matches somwhere in the list, if not
                 we don't support it */
-                i = *_bptr++;
+                i = *bptr++;
                 
                 tlist = ipcpList;
                 good = 0;
@@ -768,13 +840,13 @@ namespace ES::Driver {
                 /* we don't understand it, write it back */
                     bad = 1;
                     *tptr++ = i;
-                    j = *tptr++ = *_bptr++;
+                    j = *tptr++ = *bptr++;
                     for(i = 0; i < j - 2; ++i) {
-                        *tptr++ = *_bptr++;
+                        *tptr++ = *bptr++;
                     }
                 } else {
                 /* advance over to next option */
-                    _bptr += *_bptr - 1;
+                    bptr += *bptr - 1;
                 }
             }
             
@@ -787,15 +859,23 @@ namespace ES::Driver {
             }
         }
 
+        uint8_t ipcpRetry = 0;
+
+        uint16_t getState() {
+            return _state;
+        }
+
+
     private:
 
         uint16_t makeBadPacket(uint8_t *tptr, unsigned char *buffer) {
             /* write the config Rej packet we've built above, take on the header */
-            _bptr = buffer;
-            *_bptr++ = ConfRej;		/* Write Conf_rej */
-            _bptr++;			/* skip over ID */
-            *_bptr++ = 0;
-            *_bptr = tptr - buffer;
+            uint8_t *bptr;
+            bptr = buffer;
+            *bptr++ = ConfRej;		/* Write Conf_rej */
+            bptr++;			/* skip over ID */
+            *bptr++ = 0;
+            *bptr = tptr - buffer;
             /* length right here? */
             
             return static_cast<uint16_t>(tptr - buffer);
@@ -810,7 +890,7 @@ namespace ES::Driver {
         
         void ipcpTimerExpire()
         {
-            _ipcpTime = xTaskGetTickCount() - (IpcpTimeout * (_ipcpRetry+1) * (_ipcpRetry+1));
+            _ipcpTime = xTaskGetTickCount() - (IpcpTimeout * (ipcpRetry+1) * (ipcpRetry+1));
         }
 
         void ipcpTimerSet()
@@ -826,11 +906,9 @@ namespace ES::Driver {
 
         struct UipFwNetif *_netifs = NULL;
         struct UipFwNetif _pppIf{};
-        uint8_t _ipcpRetry = 0;
         uint16_t _ipcpTime = 0;
         uint16_t _state = static_cast<uint16_t>(IpcpState::Idle);
-        std::function<void(size_t)> _callbackSendPacket;
-        uint8_t *_bptr;
+        std::function<void(size_t, uint8_t*)> _callbackSendPacket;
     };
 
     class PPP {
@@ -881,28 +959,146 @@ namespace ES::Driver {
             AhdlcAcfc = 0x20
         };
 
-        void pppInit(void)
+        void pppInit()
         {
             _pppFlags = static_cast<uint8_t>(PppFlags::None);
             _pap.init();
             _ipcp.init();
             _lcp.init();
             _pppFlags = static_cast<uint8_t>(PppFlags::None);
-                
-            ahdlcInit(_pppRxBuffer, PppRxBufferSize); 
+            ahdlcInit(std::begin(_pppRxBuffer), PppRxBufferSize); 
             ahdlcRxReady();
         }
 
         void ahdlcInit(uint8_t *buffer, uint16_t maxrxbuffersize) {
             _ahdlcFlags = 0 | static_cast<uint8_t>(AhdlcBits::AhdlcRxAsyncMap);
-            _ahdlcRxBuffer = buffer;
-            ahdlc_max_rx_buffer_size = maxrxbuffersize;
+            //_ahdlcRxBuffer = buffer;
+            _ahdlcMaxRxBufferSize = maxrxbuffersize;
         }
 
         void ahdlcRxReady() {
             _ahdlcRxCount = 0;
             _ahdlcRxCrc = 0xffff;
             _ahdlcFlags |= static_cast<uint8_t>(AhdlcBits::AhdlcRxReady);
+        }
+
+        uint8_t getAhdlcFlags() {
+            return _ahdlcFlags;
+        }
+
+        uint8_t ahdlcRx(uint8_t c)
+        {  
+        // check to see if PPP packet is useable, we should have hardware
+        // flow control set, but if host ignores it and sends us a char when
+        // the PPP Receive packet is in use, discard the character. +++ 
+        
+        if(_ahdlcFlags & static_cast<uint8_t>(AhdlcBits::AhdlcRxReady)) 
+            {
+            // check to see if character is less than 0x20 hex we really
+            //   should set AHDLC_RX_ASYNC_MAP on by default and only turn it
+            //   off when it is negotiated off to handle some buggy stacks. 
+            if((c < 0x20) && ((_ahdlcFlags & static_cast<uint8_t>(AhdlcBits::AhdlcRxAsyncMap)) == 0)) 
+            {
+                // discard character 
+                SEGGER_RTT_WriteString(0,"Discard because char is < 0x20 hex and async map is 0");
+                return 0;
+            }
+            // are we in escaped mode? 
+            if(_ahdlcFlags & static_cast<uint8_t>(AhdlcBits::AhdlcEscaped)) 
+            {
+                // set escaped to FALSE */
+                _ahdlcFlags &= ~(static_cast<uint8_t>(AhdlcBits::AhdlcEscaped));	
+                
+                // if value is 0x7e then silently discard and reset receive packet
+                if(c == 0x7e) 
+                {
+                    ahdlcRxReady();
+                    return 0;
+                }
+                // incomming char = itself xor 20 
+                c = c ^ 0x20;	
+            } 
+            else if(c == 0x7e) 
+            {
+            // handle frame end
+                if(_ahdlcRxCrc == CrcGoodValue) 
+                {   
+
+                    char str[124];
+                    sprintf(str, "Receiving packet with good crc value, len %s", _ahdlcRxCount);
+                    SEGGER_RTT_WriteString(0, str);
+                    // we hae a good packet, turn off CTS until we are done with this packet
+                    // remove CRC bytes from packet 
+                    _ahdlcRxCount -= 2;		
+                
+                    // lock PPP buffer
+                    _ahdlcFlags &= ~(static_cast<uint8_t>(AhdlcBits::AhdlcRxReady));
+                    
+                    // upcall routine must fully process frame before return
+                    //	as returning signifies that buffer belongs to AHDLC again.
+                    
+                    if((c & 0x1) && (_ahdlcFlags & static_cast<uint8_t>(PppFlags::PppPfc)))
+                    {
+                    // Send up packet 
+                    pppUpcall((uint16_t)_ahdlcParseBuf[0],
+                            (uint8_t *)&_ahdlcParseBuf[1],
+                            (uint16_t)(_ahdlcRxCount - 1));
+                    } 
+                    else 
+                    {
+                    // Send up packet
+                    pppUpcall((uint16_t)(_ahdlcParseBuf[0] << 8 | _ahdlcParseBuf[1]), 
+                            (uint8_t *)&_ahdlcParseBuf[2], (uint16_t)(_ahdlcRxCount - 2));
+                    }
+                    _ipcp.ipcpRetry = 0;         // Alex
+                    _ahdlcTxOffline = 0;	// The remote side is alive
+                    ahdlcRxReady();
+                    return 0;
+                } 
+            else 
+                if(_ahdlcRxCount > 3)
+                {	
+                    char str[124];
+                    sprintf(str, "Receiving packet with bad crc value, was %s len %s", _ahdlcRxCrc, _ahdlcRxCount);
+                    SEGGER_RTT_WriteString(0, str);
+                // Shouldn't we dump the packet and not pass it up? 
+                }
+                ahdlcRxReady();	
+                return 0;
+            } 
+            else if(c == 0x7d) 
+            {
+            // handle escaped chars
+                _ahdlcFlags |= static_cast<uint8_t>(PppFlags::PppEscaped);
+                return 0;
+            }
+            
+            // try to store char if not to big
+            if(_ahdlcRxCount >= _ahdlcMaxRxBufferSize) 
+            { 
+                ahdlcRxReady();
+            } 
+            else 
+            {
+            // Add CRC in
+            crcAddRx(c);
+            // do auto ACFC, if packet len is zero discard 0xff and 0x03
+            if(_ahdlcRxCount == 0) 
+                {
+                    if((c == 0xff) || (c == 0x03))
+                        return 0;
+                }
+                // Store char
+            _ahdlcParseBuf[_ahdlcRxCount++] = c;
+            }		
+            } 
+        else 
+        {
+            // we are busy and didn't process the character.
+            SEGGER_RTT_WriteString(0,"Busy/not active");
+            return 1;
+        }
+        return 0;
         }
 
         void pppConnect() {
@@ -915,7 +1111,6 @@ namespace ES::Driver {
         }
 
         void pppUpcall(uint16_t protocol, uint8_t *buffer, uint16_t len){
-
             /* check to see if we have a packet waiting to be processed */
             if(_pppFlags & static_cast<uint8_t>(PppFlags::PppRxReady)) {	
                 /* demux on protocol field */
@@ -965,12 +1160,15 @@ namespace ES::Driver {
             pkt->len = ES::CommonTools::htons(count + 6);
             *((uint16_t *)(&pkt->data[0])) = ES::CommonTools::htons(protocol);
 
-            sendLcp((uint16_t)(count + 6));
+            //sendLcp((uint16_t)(count + 6), );
+            while(1) {
+                asm("nop");
+            }
         }
 
         unsigned char* getLcpPacket(size_t &packetLength) {
             size_t dataLen = 0;
-            _lcp.lcpTask(_buffer, dataLen);
+            _lcp.task(_buffer);
             if (AhdlcTxOffline && (_ahdlcTxOffline++ > AhdlcTxOffline)) {
                 _ahdlcTxOffline = 0;
                 //ppp_reconnect();
@@ -979,56 +1177,129 @@ namespace ES::Driver {
             prepareNewLcpPacket();
 
             for(size_t i = 0; i < dataLen; ++i) {    
-                putCharToLcpPackage(_buffer[i]);
+                putCharToPackage(_buffer[i]);
             }
 
             uint16_t i = _ahdlcTxCrc ^ 0xFFFF;
-            putCharToLcpPackage((uint8_t)(i & 0xFF));
-            putCharToLcpPackage((uint8_t)((i >> 8) & 0xFF));
-            putChar(LcpFlag);
+            putCharToPackage((uint8_t)(i & 0xFF));
+            putCharToPackage((uint8_t)((i >> 8) & 0xFF));
+            putChar(StartFlag);
 
             packetLength = _n;
             return _bufferChar;
         }
 
-        void sendLcp(size_t size) {
+        void sendLcp(size_t size, uint8_t* buffer) {
             prepareNewLcpPacket();
             for(size_t i = 0; i < size; ++i) {    
-                putCharToLcpPackage(_buffer[i]);
+                putCharToPackage(buffer[i]);
             }
             uint16_t i = _ahdlcTxCrc ^ 0xFFFF;
-            putCharToLcpPackage((uint8_t)(i & 0xFF));
-            putCharToLcpPackage((uint8_t)((i >> 8) & 0xFF));
-            putChar(LcpFlag);
+            putCharToPackage((uint8_t)(i & 0xFF));
+            putCharToPackage((uint8_t)((i >> 8) & 0xFF));
+            putChar(StartFlag);
             _pppSend(_n);
         }
 
-        void sendIpcp(size_t size) {
+        void sendIpcp(size_t size, uint8_t* buffer) {
+            prepareNewIpcpPacket();
+            for(size_t i = 0; i < size; ++i) {    
+                putCharToPackage(buffer[i]);
+            }
+            uint16_t i = _ahdlcTxCrc ^ 0xFFFF;
+            putCharToPackage((uint8_t)(i & 0xFF));
+            putCharToPackage((uint8_t)((i >> 8) & 0xFF));
+            putChar(StartFlag);
             _pppSend(_n);
         }
 
-        void sendPap(size_t size) {
+        void sendPap(size_t size, uint8_t* buffer) {
+            prepareNewPapPacket();
+            for(size_t i = 0; i < size; ++i) {    
+                putCharToPackage(buffer[i]);
+            }
+            uint16_t i = _ahdlcTxCrc ^ 0xFFFF;
+            putCharToPackage((uint8_t)(i & 0xFF));
+            putCharToPackage((uint8_t)((i >> 8) & 0xFF));
+            putChar(StartFlag);
             _pppSend(_n);
+        }
+
+        uint16_t getUipLen() {
+            return _uipLen;
+        }
+
+        void poll() {
+            uint8_t c;
+            _uipLen = 0;
+
+            if(!(_pppFlags & static_cast<uint8_t>(PppFlags::PppRxReady))) 
+            {
+                return;
+            }
+
+            // If IPCP came up then our link should be up. 
+            if((_ipcp.getState() & static_cast<uint16_t>(IPCP::IpcpState::IpcpTxUp)) && (_ipcp.getState()& static_cast<uint16_t>(IPCP::IpcpState::IpcpRxUp))) 
+            { 
+                return;
+            }
+
+            // call the lcp task to bring up the LCP layer 
+            _lcp.task(_buffer);
+
+
+            //Threading::sleepForMs(100);
+            // If LCP is up, neg next layer 
+            if((_lcp.getState() & static_cast<uint16_t>(LCP::LcpState::LcpTxUp)) && (_lcp.getState() & static_cast<uint16_t>(LCP::LcpState::LcpRxUp))) 
+            {
+                // If LCP wants PAP, try to authenticate, else bring up IPCP 
+                if((_lcp.getState() & static_cast<uint16_t>(LCP::LcpState::LcpRxAuth)) && (!(_pap.getState() & static_cast<uint16_t>(PAP::PapState::PapTxUp)))) 
+                {
+                    _pap.task(_buffer, _pppId);  
+                } 
+                else 
+                {
+                    _ipcp.task(_buffer, _pppId);
+                }
+            }
         }
 
         void prepareNewLcpPacket() {
             prepareNewPacket();
-            putChar(LcpFlag);
-            putCharToLcpPackage(Address);
-            putCharToLcpPackage(Control);
-            putCharToLcpPackage(static_cast<uint8_t>(LcpProtocol >> 8));
-            putCharToLcpPackage(static_cast<uint8_t>(LcpProtocol & 0xff));
+            putCharToPackage(static_cast<uint8_t>(LcpProtocol >> 8));
+            putCharToPackage(static_cast<uint8_t>(LcpProtocol & 0xff));
+        }
+
+        void prepareNewIpcpPacket() {
+            prepareNewPacket();
+            putCharToPackage(static_cast<uint8_t>(IpcpProtocol >> 8));
+            putCharToPackage(static_cast<uint8_t>(IpcpProtocol & 0xff));
+        }
+
+        void prepareNewPapPacket() {
+            prepareNewPacket();
+            putCharToPackage(static_cast<uint8_t>(PapProtocol >> 8));
+            putCharToPackage(static_cast<uint8_t>(PapProtocol & 0xff));
         }
 
         void prepareNewPacket() {
             _n = 0;
             _ahdlcTxCrc = ahdlcCrcInitialValue;
+            putChar(StartFlag);
+            putCharToPackage(Address);
+            putCharToPackage(Control);
         }
+
+        uint8_t* getBuffer() {
+            return _bufferChar;
+        }
+
+        static uint8_t protokolStep;
 
     private: 
 
-        void putCharToLcpPackage(unsigned char c) {
-            crcAdd(c);
+        void putCharToPackage(unsigned char c) {
+            crcAddTx(c);
 
             if  ((c == 0x7d) || (c == 0x7e) || 
                 ((c < 0x20)/*||
@@ -1045,7 +1316,7 @@ namespace ES::Driver {
             _n++;
         }
 
-        void crcAdd(char c) {
+        void crcAddTx(char c) {
             uint16_t b;
             uint16_t crcValue = _ahdlcTxCrc;
 
@@ -1056,9 +1327,21 @@ namespace ES::Driver {
             _ahdlcTxCrc = ((crcValue >> 8) ^ b);
         }
 
-        uint16_t ahdlc_max_rx_buffer_size;
+        void crcAddRx(char c) {
+            uint16_t b;
+            uint16_t crcValue = _ahdlcRxCrc;
+
+            b = (crcValue ^ c) & 0xFF;
+            b = (b ^ (b << 4)) & 0xFF;
+            b = (b << 8) ^ (b << 3) ^ (b >> 4);
+            
+            _ahdlcRxCrc = ((crcValue >> 8) ^ b);
+        }
+
+        uint16_t _ahdlcMaxRxBufferSize;
         uint8_t* _ahdlcRxBuffer;
-        uint8_t _pppRxBuffer[PppRxBufferSize];
+        //uint8_t _pppRxBuffer[PppRxBufferSize] = {0};
+        std::array<uint8_t, PppRxBufferSize> _pppRxBuffer;
         uint16_t _ahdlcRxCount = 0;
         uint16_t _ahdlcRxCrc = 0;
         uint8_t _ahdlcFlags = static_cast<uint8_t>(AhdlcBits::None);
@@ -1066,14 +1349,15 @@ namespace ES::Driver {
         uipBuft _uipAlignedBuf{};
         uint8_t _pppFlags = static_cast<uint8_t>(PppFlags::None);
         uint8_t _pppId = 0;
-        std::function<void(size_t)> _lcpCallback = std::bind(&PPP::sendLcp, this, std::placeholders::_1);
-        std::function<void(size_t)> _ipcpCallback = std::bind(&PPP::sendIpcp, this, std::placeholders::_1);
-        std::function<void(size_t)> _papCallback = std::bind(&PPP::sendPap, this, std::placeholders::_1);
+        std::function<void(size_t, uint8_t*)> _lcpCallback = std::bind(&PPP::sendLcp, this, std::placeholders::_1, std::placeholders::_2);
+        std::function<void(size_t, uint8_t*)> _ipcpCallback = std::bind(&PPP::sendIpcp, this, std::placeholders::_1, std::placeholders::_2);
+        std::function<void(size_t, uint8_t*)> _papCallback = std::bind(&PPP::sendPap, this, std::placeholders::_1, std::placeholders::_2);
         std::function<void(size_t)> _pppSend;
         size_t _n = 0;
         uint16_t _ahdlcTxCrc = 0;
         uint8_t _ahdlcTxOffline = 0;
-        uint8_t _buffer[32];
+        std::array<uint8_t, 128> _ahdlcParseBuf;
+        uint8_t _buffer[128];       
         unsigned char _bufferChar[128];
         LCP _lcp{_lcpCallback};
         IPCP _ipcp{_ipcpCallback};

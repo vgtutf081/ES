@@ -41,6 +41,7 @@ namespace ES::Driver {
     const char MissedCall[] = "MISSED_CALL";
     const char CregReguest[] = "AT+CREG?";
     const char CregEnable[] = "AT+CREG=1";
+    const char CgAuthPap[] = "AT+CGAUTH=1,1,\"123\",\"SIMCOM\"";
     const char Tele2Apn[] = "internet.tele2.ru";
     const char CgdcontTele2[] = "AT+CGDCONT=1,\"IP\",\"internet.tele2.ru\"";
     const char CgattEnable[] = "AT+CGATT=1";
@@ -52,4 +53,5 @@ namespace ES::Driver {
     const char CheckCsq[] = "AT+CSQ";
     const char Ato[] = "ATO";
     const char CgData[] = "AT+CGDATA=\"PPP\",1";
+    const char ConnectionPppMode[] = "CONNECT 115200";
 }

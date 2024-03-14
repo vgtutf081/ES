@@ -31,7 +31,8 @@ namespace ES::Driver {
         CopsData,
         NoneData,
         CallData,
-        MissedCallData
+        MissedCallData,
+        ConnectionCompleteData
     };
 
     enum CardinalDirections {
@@ -84,5 +85,10 @@ namespace ES::Driver {
         float altitude;
         float speed;
         float course;
+    };
+
+    enum ModemMode {
+        DataMode,
+        CommandMode
     };
 }
