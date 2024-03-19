@@ -165,8 +165,6 @@ namespace ES::Driver {
         void ahdlcStore(uint8_t c) { 
             _pppStoreBuffer[_ahdlcStoreCount] = c;
             _ahdlcStoreCount++;
-            _freePin1.configureOutput();
-            _freePin1.set();
             if(c == 0x7E) {
                 if(_ahdlcStoreCount == 1) {
                     return;
@@ -182,7 +180,6 @@ namespace ES::Driver {
                     pppMessageRecSem.give();
                 }
             }
-            _freePin1.reset();
         }
 
         void ahdlcStoreToRx() {
@@ -328,15 +325,6 @@ namespace ES::Driver {
             bool status = true;
             size_t stringSize = CommonTools::charArraySize(s) + _parserIndex;
             skipCrLf();
-            /*if(_parseBuf[_parserIndex] == CR) {
-                _parserIndex++;
-            }
-            if(_parseBuf[_parserIndex] == CR) {
-                _parserIndex++;
-            }
-            if(_parseBuf[_parserIndex] == LF) {
-                _parserIndex++;
-            }*/
             for(uint8_t i = 0; _parserIndex < stringSize; _parserIndex++, i++) {
                 if(s[i] == '\0') {
                     break;
@@ -347,15 +335,6 @@ namespace ES::Driver {
             }
             _parserIndex++;
             skipCrLf();
-            /*if(_parseBuf[_parserIndex] == CR) {
-                _parserIndex++;
-            }
-            if(_parseBuf[_parserIndex] == CR) {
-                _parserIndex++;
-            }
-            if(_parseBuf[_parserIndex] == LF) {
-                _parserIndex++;
-            }*/
             if(_parseBuf[_parserIndex] == 0) {
                 _parserIndex = 0;
             }

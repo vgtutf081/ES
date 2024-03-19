@@ -3,6 +3,8 @@
 #define ES_PP_CMSIS_UNWRAP_PERIPH_ADDRESS1(__id) ES_PP_DROP __id
 #define ES_PP_CMSIS_UNWRAP_PERIPH_ADDRESS(__id)  ES_PP_CMSIS_UNWRAP_PERIPH_ADDRESS1 __id
 
+//#define ALIGN_4  __align(4)
+
 #define ES_PP_DROP(Expression)
 
 namespace ES::CommonTools {

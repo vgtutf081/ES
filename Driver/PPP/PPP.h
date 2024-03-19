@@ -9,25 +9,7 @@
 #include <string>
 #include <array>
 
-#define ALIGN_4  __align(4)
-
 namespace ES::Driver {
-
-    typedef union UipIpaddrt {
-        uint8_t  u8[4] = {0};			/* Initializer, must come first!!! */
-        uint16_t u16[2];
-        uint32_t u32;
-    } uip_ip4addr_t;
-
-    struct UipFwNetif {
-    struct UipFwNetif *next;  /**< Pointer to the next interface when
-                    linked in a list. */
-    UipIpaddrt ipAddr;            /**< The IP address of this interface. */
-    UipIpaddrt netMask;           /**< The netmask of the interface. */
-    uint8_t (* output)(void);
-                                /**< A pointer to the function that
-                   sends a packet. */
-    };
 
     static constexpr uint8_t LcpRetryCount = 3;
     static constexpr uint32_t LpcTimeout = 10000;
@@ -72,17 +54,114 @@ namespace ES::Driver {
     static constexpr uint8_t Control = 0x03;
     static constexpr uint16_t LcpProtocol = 0xC021;
     static constexpr uint16_t PapProtocol = 0xC023;
-    static constexpr uint16_t IpcpProtocol =	0x8021;
+    static constexpr uint16_t IpcpProtocol = 0x8021;
+    static constexpr uint16_t IpV4Protocol = 0x0021;
     static constexpr uint16_t ahdlcCrcInitialValue = 0xFFFF;
 
-    static constexpr uint16_t UipLinkMtu = 0x03;
-    static constexpr uint16_t UipLlhLen = 0xC021;
+    static constexpr uint16_t UipLinkMtu = 1280;
+    static constexpr uint16_t UipLlhLen = 14;
+    static constexpr uint16_t UipIphLen = 20;    /* Size of IP header */
+    static constexpr uint16_t UipIcmpLen = 40;
+    static constexpr uint16_t UipProtoUdp = 17; 
     static constexpr uint16_t UipBufSize = UipLinkMtu + UipLlhLen;
+    static constexpr uint16_t UipProtoIcmp = 1;
+
+    static constexpr uint16_t UipIcpmEcho = 8;
+
 
     static constexpr uint16_t PppRxBufferSize = 512;
 
     static constexpr uint16_t CrcGoodValue = 0xf0b8;
 
+    typedef union UipIpaddrt {
+        uint8_t  u8[4] = {0};			/* Initializer, must come first!!! */
+        uint16_t u16[2];
+        uint32_t u32;
+    } uip_ip4addr_t;
+
+    struct UipFwNetif {
+    struct UipFwNetif *next;  /**< Pointer to the next interface when
+                    linked in a list. */
+    UipIpaddrt ipAddr;            /**< The IP address of this interface. */
+    UipIpaddrt netMask;           /**< The netmask of the interface. */
+    uint8_t (* output)(void);
+                                /**< A pointer to the function that
+                   sends a packet. */
+    };
+
+    typedef __packed union {
+        uint32_t u32[(UipBufSize + 3) / 4];
+        uint8_t u8[UipBufSize];
+    } uipBuft;
+
+    struct uip_icmp_hdr {
+        /* ICMP (echo) header. */
+        uint8_t  type,
+                icode;
+        uint16_t icmpchksum;
+        uint16_t id, seqno;
+        uint8_t  payload[1];
+    }; 
+
+    typedef uip_ip4addr_t uip_ipaddr_t;
+
+    struct uip_ip_hdr {
+    /* IPV4 header */
+        uint8_t vhl,
+            tos,
+            len[2],
+            ipid[2],
+            ipoffset[2],
+            ttl,
+            proto;
+        uint16_t ipchksum;
+        uip_ipaddr_t srcipaddr, destipaddr;
+    };
+
+    /* The TCP and IP headers. */
+    struct uip_tcpip_hdr {
+        /* IPv4 header. */
+        uint8_t vhl,
+            tos,
+            len[2],
+            ipid[2],
+            ipoffset[2],
+            ttl,
+            proto;
+        uint16_t ipchksum;
+        uip_ipaddr_t srcipaddr, destipaddr;
+        
+        /* TCP header. */
+        uint16_t srcport,
+            destport;
+        uint8_t seqno[4],
+            ackno[4],
+            tcpoffset,
+            flags,
+            wnd[2];
+        uint16_t tcpchksum;
+        uint8_t urgp[2];
+        uint8_t optdata[4];
+    };
+
+    struct uip_udpip_hdr {
+        /* IP header. */
+        uint8_t vhl,
+            tos,
+            len[2],
+            ipid[2],
+            ipoffset[2],
+            ttl,
+            proto;
+        uint16_t ipchksum;
+        uip_ipaddr_t srcipaddr, destipaddr;
+        
+        /* UDP header. */
+        uint16_t srcport,
+            destport;
+        uint16_t udplen;
+        uint16_t udpchksum;
+    };
 
     class LCP {
     public:
@@ -128,7 +207,7 @@ namespace ES::Driver {
         }
         
 
-        void task(uint8_t *buffer)  {
+        void task(uint8_t *buffer) {
             if(!(_state & static_cast<uint16_t>(LcpState::LcpTxUp)) && !(_state & static_cast<uint16_t>(LcpState::LcpTxTimeout))) {
     /* Check if we have a request pending */
                 if(1 == lpcTimerTimeout()) {
@@ -904,11 +983,207 @@ namespace ES::Driver {
             _netifs = netif;
         }
 
-        struct UipFwNetif *_netifs = NULL;
-        struct UipFwNetif _pppIf{};
+        uip_ipaddr_t getHostAddress(void)
+        {  
+            return _netifs->ipAddr; 
+        }   
+
         uint16_t _ipcpTime = 0;
         uint16_t _state = static_cast<uint16_t>(IpcpState::Idle);
         std::function<void(size_t, uint8_t*)> _callbackSendPacket;
+
+        struct UipFwNetif *_netifs = NULL;
+        struct UipFwNetif _pppIf{};
+    };
+
+    class IP {
+    public:
+
+        uint16_t uip_chksum(uint16_t *data, uint16_t len) {
+            return ES::CommonTools::htons(chksum(0, (uint8_t *)data, len));
+        } 
+
+        uint16_t uip_ipchksum(void) {
+            uint16_t sum;
+
+            sum = chksum(0, &uipBuf[UipLlhLen], UipIphLen);
+            return (sum == 0) ? 0xffff : ES::CommonTools::htons(sum);
+        }
+
+        uint16_t uip_icmpchksum(void)
+        {
+            uint16_t sum;
+
+            sum = chksum(0, &uipBuf[UipLlhLen + UipIphLen], UipIcmpLen);
+            return (sum == 0) ? 0xffff : ES::CommonTools::htons(sum);
+        } 
+
+        uint16_t uip_udpchksum(void) {
+            uint16_t upper_layer_len;
+            uint16_t sum;
+
+            upper_layer_len = (((uint16_t)(buf->len[0]) << 8) + buf->len[1]) - UipIphLen;
+            
+            // First sum pseudoheader. 
+            
+            // IP protocol and length fields. This addition cannot carry. 
+            sum = upper_layer_len + UipProtoUdp;
+            // Sum IP source and destination addresses. 
+            sum = chksum(sum, (uint8_t *)&buf->srcipaddr, 2 * sizeof(uip_ipaddr_t));
+
+            // Sum TCP header and data. 
+            sum = chksum(sum, &uipBuf[UipIphLen + UipLlhLen],
+                    upper_layer_len);
+                
+            return (sum == 0) ? 0xffff : ES::CommonTools::htons(sum);
+        }
+
+        inline uint32_t GetDWORD(uint32_t * data){
+            uint32_t temp;
+
+            temp = *((uint8_t*)(((uint8_t*)data) + 0 ));
+            temp+= *((uint8_t*)(((uint8_t*)data) + 1))<< 8;
+            temp+= *((uint8_t*)(((uint8_t*)data) + 2))<< 16;
+            temp+= *((uint8_t*)(((uint8_t*)data) + 3))<< 24;
+
+            return temp;
+        }
+
+        void printip(const uip_ipaddr_t& ip2) {
+            char str[124];
+            sprintf(str," %d.%d.%d.%d ",ip2.u8[0],ip2.u8[1],ip2.u8[2],ip2.u8[3]);
+            SEGGER_RTT_WriteString(0, str);
+        }
+
+        void uip_input(uip_ipaddr_t* ipAddress) { //ipcp getHostAddress
+            uint16_t temp16;
+            uip_ipaddr_t temp_addr;
+            char str[124];
+            if(uipIpBuf->vhl != 0x45){
+                sprintf(str, "BAD  UIP_IP_BUF->vhl: %d", uipIpBuf->vhl);
+                SEGGER_RTT_WriteString(0, str);
+                return;
+            }
+
+            temp16= (uipIpBuf->len[0] << 8) + uipIpBuf->len[1];
+            if(temp16 <= uipLen){
+                uipLen= temp16;
+            } 
+            else {
+                SEGGER_RTT_WriteString(0,"BAD LEN");
+                return;
+            }
+
+            if(ipAddress->u32 != (uipIpBuf->destipaddr.u32)) {
+                SEGGER_RTT_WriteString(0,"HOST != DEST");
+                
+                SEGGER_RTT_WriteString(0,"HST: ");  
+                temp_addr = *ipAddress;
+                printip(temp_addr);
+
+                SEGGER_RTT_WriteString(0,"DST: ");  
+                temp_addr.u32= (uipIpBuf->destipaddr.u32);
+                printip(temp_addr);
+
+                SEGGER_RTT_WriteString(0,"SRC: ");  
+                temp_addr.u32= (uipIpBuf->srcipaddr.u32);
+                printip(temp_addr);
+                return;
+            }
+
+            if(uip_ipchksum() != 0xffff){
+                SEGGER_RTT_WriteString(0,"BAD CRC");
+                return;
+            }
+
+            if(uipIpBuf->proto == UipProtoIcmp)
+            {
+                SEGGER_RTT_WriteString(0,"ICMP PROTO");  
+                if(uipIcmpBuf->type != UipIcpmEcho)
+                {
+                    SEGGER_RTT_WriteString(0,"NOT PING");
+                    return;
+                } 
+                
+                if(uip_icmpchksum() != 0xffff)
+                {
+                    SEGGER_RTT_WriteString(0,"BAD icmpCRC");
+                    return;
+                }
+
+                _returnICMP = 1;
+            }
+            else if(uipIpBuf->proto == UipProtoUdp)
+            {
+                SEGGER_RTT_WriteString(0,"UDP PROTO");  
+                
+                if(uip_udpchksum() != 0xffff) {
+                    SEGGER_RTT_WriteString(0,"BAD udpCRC");
+                    return;
+                    }            
+                        if (udpbuf->destport != /*CU_Port*/6002)
+                        {
+                        sprintf(str,"BAD UDP dst Port: %u (0x%04x)",ES::CommonTools::htons(udpbuf->srcport),udpbuf->destport);
+                        SEGGER_RTT_WriteString(2,str);
+                        return;     
+                    }
+                    
+                    _returnUDP = 1;
+            }
+            else {
+                sprintf(str,"BAD PROTO - 0x%04x",uipIpBuf->proto);
+                SEGGER_RTT_WriteString(2,str);
+                return;
+            }
+            SEGGER_RTT_WriteString(0,"input OK");
+        }
+
+        uint8_t* uipBuf = _uipAlignedBuf.u8;
+        uip_ip_hdr* uipIpBuf = reinterpret_cast<uip_ip_hdr*>(&uipBuf[UipLlhLen]);
+        uip_icmp_hdr* uipIcmpBuf =  reinterpret_cast<uip_icmp_hdr*>(&uipBuf[UipLlhLen + UipIphLen]);
+        uip_tcpip_hdr* buf =  reinterpret_cast<uip_tcpip_hdr*>(&uipBuf[UipLlhLen]);
+        uip_udpip_hdr* udpbuf =  reinterpret_cast<uip_udpip_hdr*>(&uipBuf[UipLlhLen]);
+
+        uint16_t uipLen;
+
+    private:
+
+        uint16_t chksum(uint16_t sum, const uint8_t *data, uint16_t len) {
+            uint16_t t;
+            const uint8_t *dataptr;
+            const uint8_t *last_byte;
+
+            dataptr = data;
+            last_byte = data + len - 1;
+            
+            while(dataptr < last_byte) {	// At least two more bytes 
+                t = (dataptr[0] << 8) + dataptr[1];
+                sum += t;
+                if(sum < t) {
+                sum++;		// carry 
+                }
+                dataptr += 2;
+            }
+            
+            if(dataptr == last_byte) {
+                t = (dataptr[0] << 8) + 0;
+                sum += t;
+                if(sum < t) {
+                sum++;		// carry
+                }
+            }
+
+            // Return sum in host byte order.
+            return sum;
+        }
+
+        uipBuft alignas(4) _uipAlignedBuf{};
+
+        uint16_t _uipSlen;
+        uint16_t _ipLen;
+        struct uip_fw_netif *_netifs = NULL;
+        unsigned int _returnICMP=0; // Флаг необходимости сгенерировать пакет протокола ICMP
+        unsigned int _returnUDP=0; // Флаг необходимости сгенерировать пакет протокола UDP
     };
 
     class PPP {
@@ -923,11 +1198,6 @@ namespace ES::Driver {
             PppPfc = 0x10,
             PppAcfc = 0x20
         };
-
-        typedef __packed union {
-            uint32_t u32[(UipBufSize + 3) / 4];
-            uint8_t u8[UipBufSize];
-        } uipBuft;
 
         PPP(const std::function<void(size_t)>& pppSend) : _pppSend(pppSend) {
         }
@@ -1126,8 +1396,8 @@ namespace ES::Driver {
                     _ipcp.ipcpRecieve(buffer, len, _pppId);
                     break;
                 case PppProtocols::Ipv4:	/* We must support IPV4 */
-                    memcpy(&_uipAlignedBuf.u8[UipLlhLen], buffer, len);
-                    _uipLen = len;
+                    memcpy(&_ip.uipBuf[UipLlhLen], buffer, len);
+                    _ip.uipLen = len;
                     break;
                 default:
                     pppRejectProtocol(protocol, len);
@@ -1225,13 +1495,24 @@ namespace ES::Driver {
             _pppSend(_n);
         }
 
-        uint16_t getUipLen() {
-            return _uipLen;
+        void sendIpV4(size_t sizeBuffer, uint8_t* buffer, size_t sizeHeader, uint8_t* header) {
+            prepareNewIpV4Packet();
+            for(size_t i = 0; i < sizeHeader; ++i) {    
+                putCharToPackage(header[i]);
+            }
+            for(size_t i = 0; i < sizeBuffer; ++i) {    
+                putCharToPackage(buffer[i]);
+            }
+            uint16_t i = _ahdlcTxCrc ^ 0xFFFF;
+            putCharToPackage((uint8_t)(i & 0xFF));
+            putCharToPackage((uint8_t)((i >> 8) & 0xFF));
+            putChar(StartFlag);
+            _pppSend(_n);
         }
 
         void poll() {
             uint8_t c;
-            _uipLen = 0;
+            _ip.uipLen = 0;
 
             if(!(_pppFlags & static_cast<uint8_t>(PppFlags::PppRxReady))) 
             {
@@ -1282,6 +1563,12 @@ namespace ES::Driver {
             putCharToPackage(static_cast<uint8_t>(PapProtocol & 0xff));
         }
 
+        void prepareNewIpV4Packet() {
+            prepareNewPacket();
+            putCharToPackage(static_cast<uint8_t>(IpV4Protocol >> 8));
+            putCharToPackage(static_cast<uint8_t>(IpV4Protocol & 0xff));
+        }
+
         void prepareNewPacket() {
             _n = 0;
             _ahdlcTxCrc = ahdlcCrcInitialValue;
@@ -1293,6 +1580,21 @@ namespace ES::Driver {
         uint8_t* getBuffer() {
             return _bufferChar;
         }
+
+        void send() {
+            if((_ipcp.getState() & static_cast<uint16_t>(IPCP::IpcpState::IpcpTxUp)) && (_ipcp.getState() & static_cast<uint16_t>(IPCP::IpcpState::IpcpRxUp))) {
+                //sendIpV4(); 
+            }
+            else {
+                SEGGER_RTT_WriteString(0,"No IPCP_TX_UP & IPCP_RX_UP");
+                //Modem_State=Modem_State_NeededRePPP;
+            }
+        }
+
+        uint16_t getUipLen() {
+            return _ip.uipLen;
+        }
+
 
         static uint8_t protokolStep;
 
@@ -1345,8 +1647,6 @@ namespace ES::Driver {
         uint16_t _ahdlcRxCount = 0;
         uint16_t _ahdlcRxCrc = 0;
         uint8_t _ahdlcFlags = static_cast<uint8_t>(AhdlcBits::None);
-        uint16_t _uipLen = 0;
-        uipBuft _uipAlignedBuf{};
         uint8_t _pppFlags = static_cast<uint8_t>(PppFlags::None);
         uint8_t _pppId = 0;
         std::function<void(size_t, uint8_t*)> _lcpCallback = std::bind(&PPP::sendLcp, this, std::placeholders::_1, std::placeholders::_2);
@@ -1362,6 +1662,7 @@ namespace ES::Driver {
         LCP _lcp{_lcpCallback};
         IPCP _ipcp{_ipcpCallback};
         PAP _pap{_papCallback};
+        IP _ip{};
 
     };
 
