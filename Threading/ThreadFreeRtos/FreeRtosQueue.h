@@ -40,6 +40,11 @@ template<typename Element>
 			return uxQueueMessagesWaiting(_handle);
 		}
 
+		bool messagesWaiting() {
+			UBaseType_t temp = uxQueueMessagesWaiting(_handle);
+			return temp;
+		}
+
 	private:
 		QueueHandle_t _handle;
 	};

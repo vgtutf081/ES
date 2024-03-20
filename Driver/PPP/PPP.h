@@ -65,9 +65,12 @@ namespace ES::Driver {
     static constexpr uint16_t UipProtoUdp = 17; 
     static constexpr uint16_t UipBufSize = UipLinkMtu + UipLlhLen;
     static constexpr uint16_t UipProtoIcmp = 1;
+    static constexpr uint16_t UipUdphLen = 8;    /* Size of UDP header */
 
     static constexpr uint16_t UipIcpmEcho = 8;
 
+    static constexpr uint16_t UipTtl = 64;
+    static constexpr uint16_t UipIcpmEchoReply = 0;
 
     static constexpr uint16_t PppRxBufferSize = 512;
 
@@ -832,7 +835,7 @@ namespace ES::Driver {
                 len |= *bptr++;
         
                 _state |= static_cast<uint16_t>(IpcpState::IpcpTxUp);
-		
+                pppMode = true;
       // expire the timer to make things happen after a state change
                 ipcpTimerExpire();
                 break;
@@ -943,6 +946,8 @@ namespace ES::Driver {
         uint16_t getState() {
             return _state;
         }
+
+        bool pppMode = false;
 
 
     private:
@@ -1138,6 +1143,143 @@ namespace ES::Driver {
             SEGGER_RTT_WriteString(0,"input OK");
         }
 
+        // Подготовка исходящих пакетов протокола IP        		
+        // Возвращает длину пакета протокола IP
+        /*unsigned short uip_output(void)
+        {  
+            char *buf;
+            char str[124];
+            unsigned short cnt=0;
+
+            if (_returnICMP)
+            {
+                _returnICMP= 0;
+                return BuildICMP_Out();
+            }
+
+            if (_returnUDP)
+            {
+                buf=(char*)&uipBuf[UipLlhLen + UipIphLen + UipUdphLen];
+                cnt = ES::CommonTools::htons(udpbuf->udplen)-UipUdphLen;
+                cnt= GenPacketsForProto(buf, cnt);
+                if(cnt == 0)
+                {
+                    _returnUDP= 0;
+                }
+                else
+                {
+                    sprintf(str, "uip_output data, len= %u", cnt);
+                    SEGGER_RTT_WriteString(0, str);
+                }
+            }
+            else
+            {
+                buf=(char*)&uipBuf[UipLlhLen + UipIphLen + UipUdphLen];
+                cnt= GetLostPacketsForProto(buf);
+                if(cnt != 0)
+                {
+                    _returnUDP= 1;
+
+                    sprintf(str, "uip_output LOST data, len= %u", cnt);
+                    SEGGER_RTT_WriteString(0, str);
+                }
+            }
+
+            if(CheckTimeOutForProto() == 0)
+            {                    
+                sprintf(str, "Cancel proto by Timeout");
+                SEGGER_RTT_WriteString(0, str);
+                _returnUDP = 0;
+            }
+
+            if (_returnUDP)
+            {
+                _returnUDP = 0;
+                return Build_UDP(Server_IP, Server_Port, cnt);  
+            }
+
+            return 0;
+        }*/
+
+        // ping
+        uint16_t BuildICMP_Out(void) {
+            uip_ipaddr_t temp_addr;
+            
+            nIP_ipid++;
+            uipIpBuf->ipid[0] = nIP_ipid >> 8;
+            uipIpBuf->ipid[1] = nIP_ipid & 0xff;
+            uipIpBuf->ttl = UipTtl;
+            temp_addr.u32 = (uipIpBuf->destipaddr.u32);
+            uipIpBuf->destipaddr.u32= (uipIpBuf->srcipaddr.u32);
+            uipIpBuf->srcipaddr.u32=temp_addr.u32;
+
+            uipIcmpBuf->type = UipIcpmEchoReply;
+            uipIcmpBuf->icmpchksum = 0;
+            uipIcmpBuf->icmpchksum = ES::CommonTools::htons(~ chksum(0, &uipBuf[UipLlhLen+UipIphLen], UipIcmpLen));
+            //   UIP_ICMP_BUF->icmpchksum+=0x08; //упрощенная генерация контрольной суммы
+
+            uipIpBuf->ipchksum = 0;
+            uipIpBuf->ipchksum = ~(uip_ipchksum());
+
+            return uipLen;
+        }
+
+        // Генерация пакетов протокола
+        // Параметры: Буфер (откуда и куда брать/складывать данные), длина входящего пакета для разбора
+        // Возвращает не нулевое значение если есть, что отсылать по UDP
+        /*uint16_t GenPacketsForProto(char * Buf, uint16_t Len)
+        {
+        uint16_t res = 0;
+
+        switch (Protokol_step)
+        {
+            case 0: 
+            if (ifPacket0(Buf, Len)) 
+            {
+                res = Packet1(Buf);
+                RepeatCNT++;
+            }
+            break;
+            case 2: 
+            if (ifPacket2(Buf, Len)) 
+                res = Packet3(Buf);
+            break;
+            case 3:
+            case 4:
+            case 5:
+            if (ifPacket4(Buf, Len)) 
+            {
+                res = Packet5(Buf);
+                LenReTX = res;
+                memcpy(ReTX_Buf, Buf, LenReTX);
+            }
+            else 
+                if (ifPacket6(Buf, Len)) 
+                {
+                res = Packet6(Buf);
+                LenReTX = res;
+                memcpy(ReTX_Buf, Buf, LenReTX);
+                }
+                else 
+                {
+                LOG_PRT(1,"Packet - bad Type");
+                }
+            break;
+            case 6:
+            if (ifPacket6(Buf, Len)) 
+            {  
+                res = Packet6(Buf);
+                LenReTX = res;
+                memcpy(ReTX_Buf, Buf, LenReTX);
+            }
+            break;
+            default:
+            LOG_PRT(1,"Packets - bad Type");
+        }
+
+        return res;
+        }*/
+
         uint8_t* uipBuf = _uipAlignedBuf.u8;
         uip_ip_hdr* uipIpBuf = reinterpret_cast<uip_ip_hdr*>(&uipBuf[UipLlhLen]);
         uip_icmp_hdr* uipIcmpBuf =  reinterpret_cast<uip_icmp_hdr*>(&uipBuf[UipLlhLen + UipIphLen]);
@@ -1177,13 +1319,15 @@ namespace ES::Driver {
             return sum;
         }
 
+        unsigned int nIP_ipid = 0;
+
         uipBuft alignas(4) _uipAlignedBuf{};
 
         uint16_t _uipSlen;
         uint16_t _ipLen;
         struct uip_fw_netif *_netifs = NULL;
-        unsigned int _returnICMP=0; // Флаг необходимости сгенерировать пакет протокола ICMP
-        unsigned int _returnUDP=0; // Флаг необходимости сгенерировать пакет протокола UDP
+        unsigned int _returnICMP = 0; // Флаг необходимости сгенерировать пакет протокола ICMP
+        unsigned int _returnUDP = 0; // Флаг необходимости сгенерировать пакет протокола UDP
     };
 
     class PPP {
@@ -1199,7 +1343,7 @@ namespace ES::Driver {
             PppAcfc = 0x20
         };
 
-        PPP(const std::function<void(size_t)>& pppSend) : _pppSend(pppSend) {
+        PPP(std::function<bool(char*, size_t)>& writeStream) : _writeStream(writeStream) {
         }
 
         enum class PppFlags : uint8_t {
@@ -1228,6 +1372,45 @@ namespace ES::Driver {
             AhdlcPfc = 0x10,
             AhdlcAcfc = 0x20
         };
+
+        void ahdlcStore(uint8_t c) { 
+            _pppStoreBuffer[_ahdlcStoreCount] = c;
+            _ahdlcStoreCount++;
+            if(c == 0x7E) {
+                if(_ahdlcStoreCount == 1) {
+                    return;
+                }
+                else if(_pppStoreBuffer[_ahdlcStoreCount - 1] == 0x7D) {
+                    return;
+                }
+                else {
+                    {
+                        Threading::CriticalSection lock;
+                        std::copy(std::begin(_pppStoreBuffer), std::begin(_pppStoreBuffer) + _ahdlcStoreCount, std::begin(_pppRecieveBuffer));
+                        _ahdlcRecieveCount = _ahdlcStoreCount;
+                        _ahdlcStoreCount = 0;
+                    }
+                    ahdlcStoreToRx();
+                }
+            }
+        }
+
+        void ahdlcStoreToRx() {
+            while(!(_ahdlcFlags & static_cast<uint8_t>(PPP::AhdlcBits::AhdlcRxReady))) {
+                Threading::sleepForMs(1);
+            }
+            for(size_t i = 0; i < _ahdlcRecieveCount; i++) {
+                ahdlcRx(_pppRecieveBuffer[i]);
+            }
+            std::fill(_pppRecieveBuffer.begin(), std::begin(_pppRecieveBuffer) + _ahdlcRecieveCount, 0);
+            _ahdlcRecieveCount = 0;
+        }
+
+        void ahdlcRecieve(uint8_t c) {
+            if(_ip.uipLen == 0) {
+                ahdlcStore(c);
+            }
+        }
 
         void pppInit()
         {
@@ -1468,7 +1651,7 @@ namespace ES::Driver {
             putCharToPackage((uint8_t)(i & 0xFF));
             putCharToPackage((uint8_t)((i >> 8) & 0xFF));
             putChar(StartFlag);
-            _pppSend(_n);
+            _writeStream(reinterpret_cast<char*>(_bufferChar), _n);
         }
 
         void sendIpcp(size_t size, uint8_t* buffer) {
@@ -1480,7 +1663,7 @@ namespace ES::Driver {
             putCharToPackage((uint8_t)(i & 0xFF));
             putCharToPackage((uint8_t)((i >> 8) & 0xFF));
             putChar(StartFlag);
-            _pppSend(_n);
+            _writeStream(reinterpret_cast<char*>(_bufferChar),_n);
         }
 
         void sendPap(size_t size, uint8_t* buffer) {
@@ -1492,7 +1675,7 @@ namespace ES::Driver {
             putCharToPackage((uint8_t)(i & 0xFF));
             putCharToPackage((uint8_t)((i >> 8) & 0xFF));
             putChar(StartFlag);
-            _pppSend(_n);
+            _writeStream(reinterpret_cast<char*>(_bufferChar), _n);
         }
 
         void sendIpV4(size_t sizeBuffer, uint8_t* buffer, size_t sizeHeader, uint8_t* header) {
@@ -1507,7 +1690,7 @@ namespace ES::Driver {
             putCharToPackage((uint8_t)(i & 0xFF));
             putCharToPackage((uint8_t)((i >> 8) & 0xFF));
             putChar(StartFlag);
-            _pppSend(_n);
+            _writeStream(reinterpret_cast<char*>(_bufferChar), _n);
         }
 
         void poll() {
@@ -1595,9 +1778,10 @@ namespace ES::Driver {
             return _ip.uipLen;
         }
 
-
-        static uint8_t protokolStep;
-
+        bool pppModeIsActive() {
+            return _ipcp.pppMode;
+        }
+ 
     private: 
 
         void putCharToPackage(unsigned char c) {
@@ -1640,6 +1824,11 @@ namespace ES::Driver {
             _ahdlcRxCrc = ((crcValue >> 8) ^ b);
         }
 
+        size_t _ahdlcStoreCount = 0;
+        size_t _ahdlcRecieveCount = 0;
+        std::array<uint8_t, PppRxBufferSize> _pppStoreBuffer;
+        std::array<uint8_t, PppRxBufferSize> _pppRecieveBuffer;
+
         uint16_t _ahdlcMaxRxBufferSize;
         uint8_t* _ahdlcRxBuffer;
         //uint8_t _pppRxBuffer[PppRxBufferSize] = {0};
@@ -1652,7 +1841,7 @@ namespace ES::Driver {
         std::function<void(size_t, uint8_t*)> _lcpCallback = std::bind(&PPP::sendLcp, this, std::placeholders::_1, std::placeholders::_2);
         std::function<void(size_t, uint8_t*)> _ipcpCallback = std::bind(&PPP::sendIpcp, this, std::placeholders::_1, std::placeholders::_2);
         std::function<void(size_t, uint8_t*)> _papCallback = std::bind(&PPP::sendPap, this, std::placeholders::_1, std::placeholders::_2);
-        std::function<void(size_t)> _pppSend;
+        std::function<bool(char*, size_t)>& _writeStream;
         size_t _n = 0;
         uint16_t _ahdlcTxCrc = 0;
         uint8_t _ahdlcTxOffline = 0;

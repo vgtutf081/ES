@@ -12,14 +12,12 @@
 #include <array>
 #include <string>
 #include <cmath>
+#include <functional>
 
 #include "nrf_check_ret.h"
-
 #include "CommonTools.h"
-
 #include "SIM7600AtCommands.h"
 #include "SIMTypes.h"
-
 #include "PPP.h"
 
 #include "PinMap1.0.h"
@@ -28,27 +26,17 @@ namespace ES::Driver {
   
     static constexpr size_t TimeSize = 7;
     static constexpr size_t NumberSize = 12;
-    static constexpr size_t BufferSize = 128;
 
+    template<size_t bufferSize>
     class Sim7600x {
     public:
 
-        uint8_t counterTest = 0;
-        Sim7600x(Uarte::UarteNrf uart, Timer::TimerNrf52 timer, Gpio::IGpio& nDisable, Gpio::IGpio& nReset) : 
-        _uart(uart), _timer(timer), _nDisable(nDisable), _nReset(nReset)
+        Sim7600x(Gpio::IGpio& nDisable, Gpio::IGpio& nReset, std::function<bool(char*, size_t)>& writeStream) : _writeStream(writeStream), _nDisable(nDisable), _nReset(nReset)
         {   
-            std::fill(_pppStoreBuffer.begin(), _pppStoreBuffer.end(), 0);
-            std::fill(_pppRxBuffer.begin(), _pppRxBuffer.end(), 0);
-            std::fill(_recieveBuf.begin(), _recieveBuf.end(), 0);
-            _uart.init(eventHandler, this); 
-            _uart.getStream(std::begin(_recieveByte), 1); // crlf first
-            _timer.init(1, timerEventHandler, this);
-
             _nDisable.configureOutput();
             _nDisable.set();
             _nReset.configureOutput();
             _nReset.set();//default power off
-
             _enableStatus = ModuleEnableStatus::Disabled;
         }
 
@@ -66,7 +54,6 @@ namespace ES::Driver {
         void disableModule() {
             _nDisable.reset(); //TODO invert
             Threading::sleepForMs(50);
-
         }
 
         void resetModule() {
@@ -114,7 +101,8 @@ namespace ES::Driver {
             memcpy(tempBuf, AtCrLf, 2);
             memcpy(&tempBuf[2], s, size2);
             memcpy(&tempBuf[size2 + 2], AtCrLf, 2);
-            status =_uart.writeStream(tempBuf, size2 + 4);
+            status = _writeStream(tempBuf, size2 + 4);
+            //status =_uart.writeStream(tempBuf, size2 + 4);
             return CheckErrorCode::success(status);
         }
 
@@ -122,101 +110,21 @@ namespace ES::Driver {
             ret_code_t status;
             unsigned char tempBuf[128];
             memcpy(tempBuf, s, arraySize);
-            status =_uart.writeStream(reinterpret_cast<char*>(tempBuf), arraySize);
+            status = _writeStream(reinterpret_cast<char*>(tempBuf), arraySize);
+            //status =_uart.writeStream(reinterpret_cast<char*>(tempBuf), arraySize);
             return CheckErrorCode::success(status);
         }
 
         ret_code_t sendCrLf() {
-            return _uart.writeStream(AtCrLf, 2);
+            char tempBuf[2] = {AtCrLf[0], AtCrLf[1]};
+            return _writeStream(tempBuf, 2);
         }
 
-        void handleEventUart(nrfx_uarte_event_t const * p_event) { 
-            if(p_event->type == NRFX_UARTE_EVT_RX_DONE) {
-                if(*p_event->data.rxtx.p_data == 0) {
-                    _uart.getStream(std::begin(_recieveByte), 1);
-                }
-                else {
-                    if(_modemMode == ModemMode::DataMode) {
-                        //messageRecSem.give();
-                        ahdlcRx();
-                        _uart.getStream(std::begin(_recieveByte), 1);
-                    }
-                    else {
-                        _recieveBuf[_bufIndex] = _recieveByte[0];
-                        nextRecieve();
-                    }
-               }
-            }else if(p_event->type == NRFX_UARTE_EVT_TX_DONE){
-
-            }else{ 
-                //error state
-                _uart.getStream(std::begin(_recieveByte), 1);
-            }
-        }
-
-        void handleEventTImer(nrf_timer_event_t p_event) { 
-            if(p_event == NRF_TIMER_EVENT_COMPARE0) {
-                _onRecieve = false;
-                _timer.stop();
-                messageRecSem.give();
-            }
-        }
-
-        void ahdlcStore(uint8_t c) { 
-            _pppStoreBuffer[_ahdlcStoreCount] = c;
-            _ahdlcStoreCount++;
-            if(c == 0x7E) {
-                if(_ahdlcStoreCount == 1) {
-                    return;
-                }
-                else if(_pppStoreBuffer[_ahdlcStoreCount - 1] == 0x7D) {
-                    return;
-                }
-                else {
-                    Threading::CriticalSection lock;
-                    std::copy(std::begin(_pppStoreBuffer), std::begin(_pppStoreBuffer) + _ahdlcStoreCount, std::begin(_pppRxBuffer));
-                    _ahdlcRxCount = _ahdlcStoreCount;
-                    _ahdlcStoreCount = 0;
-                    pppMessageRecSem.give();
-                }
-            }
-        }
-
-        void ahdlcStoreToRx() {
-            if(_flag == true) {
-                asm("nop");
-            }
-            while(!(_ppp.getAhdlcFlags() & static_cast<uint8_t>(PPP::AhdlcBits::AhdlcRxReady))) {
-                Threading::sleepForMs(1);
-            }
-            for(size_t i = 0; i < _ahdlcRxCount; i++) {
-                _ppp.ahdlcRx(_pppRxBuffer[i]);
-            }
-            std::fill(_pppRxBuffer.begin(), std::begin(_pppRxBuffer) + _ahdlcRxCount, 0);
-            _ahdlcRxCount = 0;
-            _flag = true;
-        }
-
-        void ahdlcRx() {
-            if(_ppp.getUipLen() == 0) {
-                ahdlcStore(_recieveByte[0]);
-            }
-        }
-
-        void pppPoll() {
-            _ppp.poll();
-        }
-
-        void stateMachine() {
-            /*if(_modemMode == ModemMode::DataMode) {
-                return;
-            }*/
+        void atRecieve(typename std::array<uint8_t, bufferSize>::const_iterator it, size_t messageSize) {
             std::fill(_parseBuf.begin(), _parseBuf.end(), 0);
             {  
                 Threading::CriticalSection lock;
-                std::copy(std::begin(_recieveBuf), std::begin(_recieveBuf) + _bufIndex, std::begin(_parseBuf));
-                std::fill(_recieveBuf.begin(), std::begin(_recieveBuf) + _bufIndex, 0);
-                _bufIndex = 0;
+                std::copy(it, it + messageSize, std::begin(_parseBuf));
                 _parserIndex = 0;
             }
             size_t bootDone = false;
@@ -259,11 +167,6 @@ namespace ES::Driver {
                 if(checkAT(_atCommandForCheck)) {
                     _commandConfirmed.give();
                 }
-                /*if(_parserIndex != 0) {
-                    if(checkAT(AtStatusOk)) {
-                        _okRecieved.give();
-                    }
-                }*/
                 return;
             }
             if(_moduleStatus == ModuleStatus::WaitingForData) {
@@ -307,18 +210,6 @@ namespace ES::Driver {
                     return;
                 }
             }
-        }
-
-        void nextRecieve() {
-            if(!_onRecieve) {
-                _onRecieve = true;
-                _timer.start();
-            }
-            else{
-                _timer.clear();
-            }
-            _bufIndex++;
-            _uart.getStream(std::begin(_recieveByte), 1);
         }
 
         bool checkAT(const char* s) {
@@ -556,8 +447,6 @@ namespace ES::Driver {
             return status;
         }
 
-        Threading::BinarySemaphore messageRecSem;
-        Threading::BinarySemaphore pppMessageRecSem;
         Threading::BinarySemaphore incomingCall;
         
         bool testCall() {
@@ -595,30 +484,15 @@ namespace ES::Driver {
             return sendCommand(CheckCsq);
         }
 
-        /*bool sendLcp() {
-            size_t packetSize = 0;
-            unsigned char *ptr = _ppp.getLcpPacket(packetSize);
-            return sendData(reinterpret_cast<char*>(ptr), packetSize);
-        }*/
-
         bool switchToDataMode() {
             bool status = true;
             status &= sendCommand(CgData);
             _moduleStatus = ModuleStatus::WaitingForData;
             if(_dataRecieved.take(1000)) {
-                if(parseData(DataType::ConnectionCompleteData)) {
-                    _ppp.pppInit();
-                    _ppp.pppConnect();
-                    _ppp.protokolStep = 0;
-                }
+                status &= parseData(DataType::ConnectionCompleteData);
+                
             }
             return status;
-        }
-
-        bool pppSend(size_t packetSize) {
-            unsigned char *ptr = _ppp.getBuffer();
-            return sendData(reinterpret_cast<char*>(ptr), packetSize);
-            asm("nop");
         }
 
         ModemMode getModemMode() {
@@ -626,29 +500,10 @@ namespace ES::Driver {
         }
 
     private:
-   
-        static void eventHandler(nrfx_uarte_event_t const * p_event, void * p_context) {
-            auto _this = reinterpret_cast<Sim7600x*>(p_context);
-            _this->handleEventUart(p_event);
-        }
 
-        static void timerEventHandler(nrf_timer_event_t event_type, void* p_context){
-            auto _this = reinterpret_cast<Sim7600x*>(p_context);
-            _this->handleEventTImer(event_type);
-		}
-
-    private:
-
-        bool _flag = false;
-
-        size_t _ahdlcStoreCount = 0;
-        size_t _ahdlcRxCount = 0;
-        std::array<uint8_t, PppRxBufferSize> _pppStoreBuffer;
-        std::array<uint8_t, PppRxBufferSize> _pppRxBuffer;
+        std::function<bool(char*, size_t)>& _writeStream;
         ModemMode _modemMode = ModemMode::CommandMode;
 
-        std::function<void(size_t)> _pppSend = std::bind(&Sim7600x::pppSend, this, std::placeholders::_1);
-        PPP _ppp{_pppSend};
         GsmOperator _gsmOperator = GsmOperator::Undefined;
         DataType _gpsData;
 
@@ -657,7 +512,6 @@ namespace ES::Driver {
         Threading::BinarySemaphore _dataRecieved;
         Threading::BinarySemaphore _okRecieved;
 
-        Uarte::UarteNrf _uart;
         Gpio::IGpio& _nDisable;
         Gpio::IGpio& _nReset;
 
@@ -671,15 +525,9 @@ namespace ES::Driver {
         char _missedCallTime[TimeSize];
         char _missedCallNumber[NumberSize];
 
-        Timer::TimerNrf52 _timer;
-        size_t _bufIndex = 0;
         uint8_t _parserIndex = 0;
-        std::array<uint8_t, 1> _recieveByte;
-        std::array<uint8_t, BufferSize> _recieveBuf;
-        std::array<uint8_t, BufferSize> _parseBuf;
+        std::array<uint8_t, bufferSize> _parseBuf;
         const char * _atCommandForCheck = nullptr;
-
-        bool _onRecieve = false;
 
         bool _cPinReady = false;
         bool _smsReady = false;
@@ -691,8 +539,6 @@ namespace ES::Driver {
         ModuleEnableStatus _enableStatus = ModuleEnableStatus::Disabled;
         ModuleStatus _moduleStatus = ModuleStatus::None;
         PhoneStatus _phoneStatus = PhoneStatus::Idle;
-
-        Gpio::Nrf52Gpio _freePin1{FREE_PIN1};
     };
 
 }
