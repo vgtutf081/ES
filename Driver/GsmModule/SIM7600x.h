@@ -478,6 +478,7 @@ namespace ES::Driver {
             if(value == 4) {
                 sendCommand(CmnpAutoOnly);
             }
+            return true;
         }        
 
         bool checkCsq() {
