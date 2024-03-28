@@ -53,6 +53,8 @@ namespace ES::Driver::Gpio {
 
         }
 
+        constexpr Nrf52Gpio();
+
         static void gpioteHandler(nrfx_gpiote_pin_t pin, nrf_gpiote_polarity_t action, void* context) {
             static_cast<void>(action);
             //reinterpret_cast<InterruptCallback*>(context)->onGpioInterrupt(ID{pin});

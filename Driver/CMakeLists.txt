@@ -4,7 +4,8 @@ add_library(${LIBRARY_NAME} INTERFACE)
 
 target_include_directories(${LIBRARY_NAME}
     INTERFACE
-        "${CMAKE_CURRENT_SOURCE_DIR}"
+        #"${CMAKE_CURRENT_SOURCE_DIR}"
+        "${CMAKE_CURRENT_SOURCE_DIR}/Spi"
         "${CMAKE_CURRENT_SOURCE_DIR}/Gpio"
         "${CMAKE_CURRENT_SOURCE_DIR}/Gpio/Extender"
         "${CMAKE_CURRENT_SOURCE_DIR}/Uart"
@@ -17,6 +18,7 @@ target_include_directories(${LIBRARY_NAME}
         "${CMAKE_CURRENT_SOURCE_DIR}/Comparator"
         "${CMAKE_CURRENT_SOURCE_DIR}/PPP"
         "${CMAKE_CURRENT_SOURCE_DIR}/Rtc"
+        "${CMAKE_CURRENT_SOURCE_DIR}/Flash"
 )
 
 #source
@@ -60,8 +62,11 @@ target_sources(${LIBRARY_NAME}
     ${CMAKE_CURRENT_SOURCE_DIR}/Adc/IAdc.h
     ${CMAKE_CURRENT_SOURCE_DIR}/Comparator/Comparator.h
     ${CMAKE_CURRENT_SOURCE_DIR}/Comparator/Comparator.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/Spi/SpiMasterNrf52.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/Spi/SpiMaster.h
     ${CMAKE_CURRENT_SOURCE_DIR}/I2C/II2C.h
     ${CMAKE_CURRENT_SOURCE_DIR}/I2C/I2CNrf52.h
     ${CMAKE_CURRENT_SOURCE_DIR}/Telemetry/Dshot.h
     ${CMAKE_CURRENT_SOURCE_DIR}/Telemetry/Dshot.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/Flash/W25Q32FV.h
 )

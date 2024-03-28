@@ -1,7 +1,7 @@
 #pragma once
 #include "SEGGER_RTT.h"
 #include "UarteNrf52.h"
-#include "GpioNrf52.h"
+#include "IGpio.h"
 #include "TimerNrf52.h"
 
 //#include "FreeRTOS.h"
