@@ -68,6 +68,7 @@ typedef struct
     nrfx_drv_state_t state;        /**< Instance state. */
     bool             reliable;     /**< Reliable mode flag. */
     uint8_t          tick_latency; /**< Maximum length of interrupt handler in ticks (max 7.7 ms). */
+    void *           context;
 } nrfx_rtc_cb_t;
 
 // User callbacks local storage.
@@ -76,7 +77,8 @@ static nrfx_rtc_cb_t      m_cb[NRFX_RTC_ENABLED_COUNT];
 
 nrfx_err_t nrfx_rtc_init(nrfx_rtc_t const * const  p_instance,
                          nrfx_rtc_config_t const * p_config,
-                         nrfx_rtc_handler_t        handler)
+                         nrfx_rtc_handler_t        handler,
+                         void *                    p_context)
 {
     NRFX_ASSERT(p_config);
     NRFX_ASSERT(handler);
@@ -99,6 +101,7 @@ nrfx_err_t nrfx_rtc_init(nrfx_rtc_t const * const  p_instance,
     m_cb[p_instance->instance_id].reliable     = p_config->reliable;
     m_cb[p_instance->instance_id].tick_latency = p_config->tick_latency;
     m_cb[p_instance->instance_id].state        = NRFX_DRV_STATE_INITIALIZED;
+    m_cb[p_instance->instance_id].context      = p_context;
 
     err_code = NRFX_SUCCESS;
     NRFX_LOG_INFO("Function: %s, error code: %s.", __func__, NRFX_LOG_ERROR_STRING_GET(err_code));
@@ -300,7 +303,7 @@ static void irq_handler(NRF_RTC_Type * p_reg,
             nrf_rtc_int_disable(p_reg,int_mask);
             nrf_rtc_event_clear(p_reg,event);
             NRFX_LOG_DEBUG("Event: %s, instance id: %lu.", EVT_TO_STR(event), instance_id);
-            m_handlers[instance_id]((nrfx_rtc_int_type_t)i);
+            m_handlers[instance_id]((nrfx_rtc_int_type_t)i, m_cb[instance_id].context);
         }
         int_mask <<= 1;
         event    = (nrf_rtc_event_t)((uint32_t)event + sizeof(uint32_t));
@@ -311,7 +314,7 @@ static void irq_handler(NRF_RTC_Type * p_reg,
     {
         nrf_rtc_event_clear(p_reg, event);
         NRFX_LOG_DEBUG("Event: %s, instance id: %lu.", EVT_TO_STR(event), instance_id);
-        m_handlers[instance_id](NRFX_RTC_INT_TICK);
+        m_handlers[instance_id](NRFX_RTC_INT_TICK, m_cb[instance_id].context);
     }
 
     event = NRF_RTC_EVENT_OVERFLOW;
@@ -320,7 +323,7 @@ static void irq_handler(NRF_RTC_Type * p_reg,
     {
         nrf_rtc_event_clear(p_reg,event);
         NRFX_LOG_DEBUG("Event: %s, instance id: %lu.", EVT_TO_STR(event), instance_id);
-        m_handlers[instance_id](NRFX_RTC_INT_OVERFLOW);
+        m_handlers[instance_id](NRFX_RTC_INT_OVERFLOW, m_cb[instance_id].context);
     }
 }
 

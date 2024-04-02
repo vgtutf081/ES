@@ -427,7 +427,7 @@ ret_code_t nrf_libuarte_async_init(const nrf_libuarte_async_t * const p_libuarte
         rtc_config.interrupt_priority = irq_prio_inc(p_config->int_prio);
  
         rtc_config.prescaler = 0;
-        ret = nrfx_rtc_init(p_libuarte->p_rtc, &rtc_config, p_libuarte->rtc_handler);
+        ret = nrfx_rtc_init(p_libuarte->p_rtc, &rtc_config, p_libuarte->rtc_handler, NULL);
         if (ret != NRFX_SUCCESS)
         {
             return NRF_ERROR_INTERNAL;

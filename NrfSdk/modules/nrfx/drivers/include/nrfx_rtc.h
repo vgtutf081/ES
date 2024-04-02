@@ -122,7 +122,7 @@ typedef struct
 }
 
 /** @brief RTC driver instance handler type. */
-typedef void (*nrfx_rtc_handler_t)(nrfx_rtc_int_type_t int_type);
+typedef void (*nrfx_rtc_handler_t)(nrfx_rtc_int_type_t int_type, void *p_context);
 
 /**
  * @brief Function for initializing the RTC driver instance.
@@ -139,7 +139,8 @@ typedef void (*nrfx_rtc_handler_t)(nrfx_rtc_int_type_t int_type);
  */
 nrfx_err_t nrfx_rtc_init(nrfx_rtc_t const * const  p_instance,
                          nrfx_rtc_config_t const * p_config,
-                         nrfx_rtc_handler_t        handler);
+                         nrfx_rtc_handler_t        handler,
+                         void *                    p_context);
 
 /**
  * @brief Function for uninitializing the RTC driver instance.

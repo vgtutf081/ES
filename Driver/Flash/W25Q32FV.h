@@ -6,6 +6,7 @@
 #include "ThreadFreeRtos.h"
 
 namespace ES::Driver {
+	
     class W25q32fv : public ISpiEventHandler {
     public:
     	static constexpr size_t MaxSizeOfTransfer = 260;
@@ -37,8 +38,6 @@ namespace ES::Driver {
 
 		static constexpr size_t MaxAddress = 0x40000;
 
-        //static constexpr size_t CommandSize = 1;
-
 		using FlashBuf = std::array<uint8_t, MaxSizeOfTransfer>;
 
         enum class Commands : uint8_t {
@@ -58,15 +57,15 @@ namespace ES::Driver {
 
 		struct Cmd {
 		public:
-			Cmd(Commands id) : id(static_cast<uint8_t>(id)) {
-
+			constexpr Cmd(Commands id) : id(uint8_t(id)) {
+				
 			}
 			uint8_t id;
 		};
 
 		struct AddressCmd : public Cmd {
 		public:
-			AddressCmd(Commands id, uint32_t addr) : Cmd(id),
+			constexpr AddressCmd(Commands id, uint32_t addr) : Cmd(id),
 					a0(static_cast<uint8_t>(addr >> 16)),
 					a1(static_cast<uint8_t>(addr >> 8)),
 					a2(static_cast<uint8_t>(addr)) {
@@ -114,7 +113,7 @@ namespace ES::Driver {
 		FlashBuf::const_iterator readPage(uint32_t address, size_t size) {
 			if(address + size <= MaxAddress) {
 				waitWriteComplete();
-				writeCmd({Commands::WriteDisable});
+				writeCmd(Cmd{Commands::WriteDisable});
 				_txBuffer.fill(0xFF);
 				return writeCmd(AddressCmd{Commands::ReadData, address}, size);
 			}
@@ -136,33 +135,36 @@ namespace ES::Driver {
 				if(++count >= 10) {
 					return false;
 				}
-			} while(compareRegister(StatusBusy, {Commands::ReadStatusRegister1}));
+			} while(compareRegister(StatusBusy, Cmd{Commands::ReadStatusRegister1}));
 			return true;
 		}
 
         bool tryWriteEnable() {
 			size_t count = 0;
 			do {
-				writeCmd({Commands::WriteEnable});
+				writeCmd(Cmd{Commands::WriteEnable});
                 Threading::sleepForMs(1);
 				if(++count > 10) {
 					return false;
 				}
-			} while(!compareRegister(StatusWel, {Commands::ReadStatusRegister1}));
+			} while(!compareRegister(StatusWel, Cmd{Commands::ReadStatusRegister1}));
 			return true;
 		}
-
-        FlashBuf::const_iterator writeCmd(const Cmd& command, size_t additionalSize = 0) {
-			auto size = sizeof(command);
+		
+		template<typename cmd>
+        FlashBuf::const_iterator writeCmd(const cmd& command, size_t additionalSize = 0) {
+			size_t size = sizeof(command);
 			bool status = false;
 			if(additionalSize + size <= MaxSizeOfTransfer) {
 				std::memcpy(&_txBuffer.front(), &command, size);
 				status = _spiMaster.readWrite(_txBuffer.begin(), _rxBuffer.begin(), size + additionalSize);
+				waitTranferEnd();
 			}
 			return _rxBuffer.begin() + size;
 		}
 
-        bool compareRegister(uint8_t value, const Cmd& command) {
+		template<typename cmd>
+        bool compareRegister(uint8_t value, const cmd& command) {
 			//auto ret = writeCmd(command, 1);
             uint8_t field = *(writeCmd(command, 1));
             return field && value;
