@@ -19,6 +19,7 @@ target_include_directories(${LIBRARY_NAME}
         "${CMAKE_CURRENT_SOURCE_DIR}/PPP"
         "${CMAKE_CURRENT_SOURCE_DIR}/Rtc"
         "${CMAKE_CURRENT_SOURCE_DIR}/Flash"
+        "${CMAKE_CURRENT_SOURCE_DIR}/I2S"
 )
 
 #source
@@ -69,4 +70,7 @@ target_sources(${LIBRARY_NAME}
     ${CMAKE_CURRENT_SOURCE_DIR}/Telemetry/Dshot.h
     ${CMAKE_CURRENT_SOURCE_DIR}/Telemetry/Dshot.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/Flash/W25Q32FV.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/I2S/I2SNrf52.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/I2S/I2S.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/I2S/ToneGenerator.h
 )
