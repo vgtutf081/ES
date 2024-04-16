@@ -80,14 +80,16 @@ namespace ES {
         }
 
         void setTime(unsigned int hour, unsigned int min, unsigned int sec, unsigned int day, unsigned int mon, unsigned int year, unsigned int dow) {
-            _actualTime.hour = hour; //TODO may be -1
-            _actualTime.min = min;
-            _actualTime.sec = sec;
-            _actualTime.day = day;
-            _actualTime.month = mon;
-            _actualTime.year = year;
-            _actualTime.dow = dow;
+            actualTime.hour = hour; //TODO may be -1
+            actualTime.min = min;
+            actualTime.sec = sec;
+            actualTime.day = day;
+            actualTime.month = mon;
+            actualTime.year = year;
+            actualTime.dow = dow;
         }
+
+        Time actualTime{};
 
     private:
 
@@ -95,59 +97,59 @@ namespace ES {
             _subSecond++;
             if(_subSecond == TickFreqHz) {
                 _subSecond = 0;
-                _actualTime.sec++;
+                actualTime.sec++;
                 //_gpio.toggle();
             }
-            if(_actualTime.sec == 60) {
-                _actualTime.min++;
-                _actualTime.sec = 0;
+            if(actualTime.sec == 60) {
+                actualTime.min++;
+                actualTime.sec = 0;
             }
-            if(_actualTime.min == 60) {
-                _actualTime.hour++;
-                _actualTime.hour = 0;
+            if(actualTime.min == 60) {
+                actualTime.hour++;
+                actualTime.hour = 0;
             }
-            if(_actualTime.hour == 24) {
-                _actualTime.day++;
-                _actualTime.dow++;
-                _actualTime.hour = 0;
+            if(actualTime.hour == 24) {
+                actualTime.day++;
+                actualTime.dow++;
+                actualTime.hour = 0;
             }
-            if(_actualTime.dow = 7) {
-                _actualTime.dow = 0;
+            if(actualTime.dow = 7) {
+                actualTime.dow = 0;
             }
-            if(_actualTime.day == 28) {
-                if(_actualTime.month == 2 - 1) {
-                    if((_actualTime.year - 1) % 4 != 0) {
-                        _actualTime.month++;
-                        _actualTime.day = 0;
+            if(actualTime.day == 28) {
+                if(actualTime.month == 2 - 1) {
+                    if((actualTime.year - 1) % 4 != 0) {
+                        actualTime.month++;
+                        actualTime.day = 0;
                     }
                 }
             }
-            if(_actualTime.day == 29) {
-                if(_actualTime.month == 2 - 1) {
-                    if((_actualTime.year - 1) % 4 == 0) {
-                        _actualTime.month++;
-                        _actualTime.day = 0;
+            if(actualTime.day == 29) {
+                if(actualTime.month == 2 - 1) {
+                    if((actualTime.year - 1) % 4 == 0) {
+                        actualTime.month++;
+                        actualTime.day = 0;
                     }
                 }
             }
-            if(_actualTime.day == 30) {
-                if(_actualTime.month == 4 - 1 || _actualTime.month == 6 - 1 || _actualTime.month == 9 - 1 || _actualTime.month == 11 - 1) {
-                    _actualTime.month++;
-                    _actualTime.day = 0;
+            if(actualTime.day == 30) {
+                if(actualTime.month == 4 - 1 || actualTime.month == 6 - 1 || actualTime.month == 9 - 1 || actualTime.month == 11 - 1) {
+                    actualTime.month++;
+                    actualTime.day = 0;
                 }
             }
-            if(_actualTime.day == 31) {
-                _actualTime.month++;
-                _actualTime.day = 0;
+            if(actualTime.day == 31) {
+                actualTime.month++;
+                actualTime.day = 0;
             }
-            if(_actualTime.month == 12) {
-                _actualTime.year++;
+            if(actualTime.month == 12) {
+                actualTime.year++;
             }
         }
 
     protected:
 
-        Time _actualTime{};
+
 
     private: 
 
