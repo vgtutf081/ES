@@ -37,33 +37,6 @@ namespace ES::Driver::I2C {
             }
         }
 
-        bool read(uint16_t address, uint8_t *buffer, size_t size) override {
-            ret_code_t ret;
-            yieldForBusy();
-            if(!acquire()){ return false;}
-            ret = nrfx_twim_rx(&_instance, address >> 1, buffer, size);
-            bool status = (ret == NRF_SUCCESS) & _endOfTransfer.take(MaxDelayTransfer);
-            release();
-            return status;
-        }
-
-        bool write(uint16_t address, const uint8_t *buffer, size_t size) override {
-            ret_code_t ret;
-            if(!acquire()){ return false;}
-            auto pointer = buffer;
-
-        	if(!nrfx_is_in_ram(pointer)) {
-        		std::memcpy(_buf.data(), pointer, size);
-        		pointer = _buf.data();
-        	}
-            yieldForBusy();
-            ret = nrfx_twim_tx(&_instance, address >> 1, static_cast<const uint8_t*>(pointer), size, false);
-
-            bool status = (ret == NRF_SUCCESS) & _endOfTransfer.take(MaxDelayTransfer);
-            release();
-            return status;
-        }
-
         bool read(uint16_t address, std::uint16_t memAddress, size_t memAddressBitCount, uint8_t* buffer, size_t size) override {
             bool result = false;
             size_t transferSize = pasteAddress(memAddress, memAddressBitCount);
@@ -94,6 +67,33 @@ namespace ES::Driver::I2C {
         }
 
     private:
+
+        bool read(uint16_t address, uint8_t *buffer, size_t size) override {
+            ret_code_t ret;
+            yieldForBusy();
+            if(!acquire()){ return false;}
+            ret = nrfx_twim_rx(&_instance, address >> 1, buffer, size);
+            bool status = (ret == NRF_SUCCESS) & _endOfTransfer.take(MaxDelayTransfer);
+            release();
+            return status;
+        }
+
+        bool write(uint16_t address, const uint8_t *buffer, size_t size) override {
+            ret_code_t ret;
+            if(!acquire()){ return false;}
+            auto pointer = buffer;
+
+        	if(!nrfx_is_in_ram(pointer)) {
+        		std::memcpy(_buf.data(), pointer, size);
+        		pointer = _buf.data();
+        	}
+            yieldForBusy();
+            ret = nrfx_twim_tx(&_instance, address >> 1, static_cast<const uint8_t*>(pointer), size, false);
+
+            bool status = (ret == NRF_SUCCESS) & _endOfTransfer.take(MaxDelayTransfer);
+            release();
+            return status;
+        }
 
         inline void yieldForBusy() {
             while(nrfx_twim_is_busy(&_instance)) {
