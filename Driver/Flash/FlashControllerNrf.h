@@ -63,6 +63,24 @@ namespace ES::Driver::Flash {
         return true;
     }
 
+    inline bool write(uint32_t address, const uint8_t* values, size_t size) {
+
+        if(((address % sizeof(uint32_t)) != 0) || ((address + (size - 1) * sizeof(uint32_t)) >= getPageSize() * getPageCount())) {
+            return false;
+        }
+
+        setFlashMode(FlashMode::WriteEnable);
+
+        for (size_t i = 0; i < size; i++) {
+            ((uint32_t*)address)[i] = static_cast<uint32_t>(values[i]);
+            waitForReady();
+        }
+
+        setFlashMode(FlashMode::ReadOnly);
+
+        return true;
+    }
+
     inline uint32_t read(uint32_t address) {
         return *reinterpret_cast<const uint32_t*>(address);
     }
