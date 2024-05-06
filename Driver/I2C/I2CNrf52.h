@@ -1,13 +1,9 @@
 #pragma once
 
+#include <array>
 #include "II2C.h"
 #include "nrfx_twim.h"
-
-#include "ThreadFreeRtos.h"
-#include "Semaphore.h"
-#include "ActionLock.h"
-
-#include <array>
+#include "GpioNrf52.h"
 
 namespace ES::Driver::I2C {
 
@@ -18,6 +14,17 @@ namespace ES::Driver::I2C {
         explicit I2CNrf52 (nrfx_twim_t instance, uint32_t sda, uint32_t scl, nrf_twim_frequency_t frequency = NRF_TWIM_FREQ_400K) : _instance(instance), _sda(sda), _scl(scl), _frequency(frequency) {
             ret_code_t ret;
             nrfx_twim_config_t twi_config;
+
+            Gpio::Nrf52Gpio sclPin {_scl};
+            Gpio::Nrf52Gpio sdaPin {_sda};
+            sclPin.configureInput();
+            sdaPin.configureInput();
+            if(!(sclPin.read() && sdaPin.read())) {
+                while(1) {}
+            }
+            sclPin.disable();
+            sdaPin.disable();
+
             twi_config.scl                = _scl;
             twi_config.sda                = _sda;
             twi_config.frequency          = _frequency;
