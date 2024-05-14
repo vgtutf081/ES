@@ -341,6 +341,19 @@ namespace ES::Driver {
             return true;
         }
 
+        bool makeCall(const char * number) {
+            char atdCommand[17];
+            strcpy(atdCommand, ATD);
+            strcpy((atdCommand + CommonTools::charArraySize(ATD)), number);
+            auto status = sendCommand(atdCommand);
+            if(!status) {
+                return false;
+            }
+            status &= checkForOk();
+            _phoneStatus = PhoneStatus::OutgoingPreCall;
+            return status;
+        }
+
         bool makeCall() {
             auto status = sendCommand(AtdTest);
             if(!status) {
