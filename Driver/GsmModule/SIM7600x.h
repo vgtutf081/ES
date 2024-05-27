@@ -366,13 +366,7 @@ namespace ES::Driver {
         }
 
         bool disconnectCall() {
-            bool status;
-            if(_phoneStatus == PhoneStatus::IncomingPreCall || _phoneStatus == PhoneStatus::IncomingCall) {
-                status = sendCommand(DisconnectCall);
-            }
-            else {
-                status = sendCommand(HangUp);
-            }
+            auto status = sendCommand(HangUp);
             status &= waitingForOk();
             if(status) {
                 _phoneStatus = PhoneStatus::Idle;
