@@ -31,10 +31,12 @@ namespace ES::Driver {
     const char CgactIsOk12[] = "+CGACT: 1,1\r\n+CGACT: 2,1\r\n+CGACT: 3,0";
     const char CgactIsOk1[] = "+CGACT: 1,1\r\n+CGACT: 2,0\r\n+CGACT: 3,0";
 
-
+    const char MakeCall[] = "ATD";
     const char AnswerCall[] = "ATA";
     const char DisconnectCall[] = "ATH";
     const char SetAthAvilable[] = "AT+CVHU=0";
+    const char SetLinePresentation[] = "AT+CLIP=1";
+    const char HangUp[] = "AT+CHUP";
     const char AtdTest[] = "ATD+79081460356;";
     const char VoiceCallBegin[] = "VOICE CALL: BEGIN";
     const char VoiceCallEnd[] = "VOICE CALL: END";

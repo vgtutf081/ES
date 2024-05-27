@@ -98,11 +98,10 @@ namespace ES::Driver {
             ret_code_t status;
             size_t size2 = CommonTools::charArraySize(s);
             char tempBuf[128];
-            memcpy(tempBuf, AtCrLf, 2);
-            memcpy(&tempBuf[2], s, size2);
-            memcpy(&tempBuf[size2 + 2], AtCrLf, 2);
-            status = _writeStream(tempBuf, size2 + 4);
-            //status =_uart.writeStream(tempBuf, size2 + 4);
+            //Use only CR
+            memcpy(&tempBuf[0], s, size2);
+            memcpy(&tempBuf[size2], AtCrLf, 1);
+            status = _writeStream(tempBuf, size2 + 1);
             return CheckErrorCode::success(status);
         }
 
@@ -341,29 +340,37 @@ namespace ES::Driver {
             return true;
         }
 
-        bool makeCall() {
-            auto status = sendCommand(AtdTest);
+        bool makeCall(const char * number) {
+            char atdCommand[17];
+            strcpy(atdCommand, MakeCall);
+            strcpy((atdCommand + CommonTools::charArraySize(MakeCall)), number);
+            auto status = sendCommand(atdCommand);
             if(!status) {
                 return false;
             }
-            status &= checkForOk();
-            _phoneStatus = PhoneStatus::OutgoingPreCall;
+            status &= waitingForOk();
+            if(status) {
+                _phoneStatus = PhoneStatus::OutgoingPreCall;
+            }
             return status;
         }
 
-        bool disconnectCall() {
+        bool setAthAvilable() {
             auto status = sendCommand(SetAthAvilable);
-            size_t count = 20;
-            while(count--) {
-                if(_okRecieved.take(10)) {
-                    break;
-                }
+            return status && checkForOk();
+        }
+
+        bool enableLinePresentation() {
+            auto status = sendCommand(SetLinePresentation);
+            return status && checkForOk();
+        }
+
+        bool disconnectCall() {
+            auto status = sendCommand(HangUp);
+            status &= waitingForOk();
+            if(status) {
+                _phoneStatus = PhoneStatus::Idle;
             }
-            if(count == 0) {
-                return false;
-            }
-            status = sendCommand(DisconnectCall);
-            _phoneStatus = PhoneStatus::Idle;
             return status;
         }
 
