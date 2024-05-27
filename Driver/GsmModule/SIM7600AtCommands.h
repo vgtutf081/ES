@@ -23,11 +23,13 @@ namespace ES::Driver {
     const char AtStatusReady[] = {'R', 'E', 'A', 'D', 'Y'};
     const char AtStatusOk[] = "OK";
     const char AtCrLf[] = {CR, LF};
-    const char CregIsOk[] = "+CREG: 0,1";
+    const char CregIsOk1[] = "+CREG: 0,1";
+    const char CregIsOk2[] = "+CREG: 0,2";
     const char CgattRequest[] = "AT+CGATT?";
     const char CgactRequest[] = "AT+CGACT?";
     const char CgattIsOk[] = "+CGATT: 1";
-    const char CgactIsOk[] = "+CGACT: 1,1\r\n+CGACT: 2,1\r\n+CGACT: 3,0";
+    const char CgactIsOk12[] = "+CGACT: 1,1\r\n+CGACT: 2,1\r\n+CGACT: 3,0";
+    const char CgactIsOk1[] = "+CGACT: 1,1\r\n+CGACT: 2,0\r\n+CGACT: 3,0";
 
 
     const char AnswerCall[] = "ATA";
@@ -44,6 +46,7 @@ namespace ES::Driver {
     const char CgAuthPap[] = "AT+CGAUTH=1,1,\"123\",\"SIMCOM\"";
     const char Tele2Apn[] = "internet.tele2.ru";
     const char CgdcontTele2[] = "AT+CGDCONT=1,\"IP\",\"internet.tele2.ru\"";
+    const char CgdcontRostelecom[] = "AT+CGDCONT=1,\"IP\",\"internet.rtk.ru\"";
     const char CgattEnable[] = "AT+CGATT=1";
     const char CgactEnable[] = "AT+CGACT=1,1";
     const char CmnpGsmOnly[] = "AT+CNMP=13";

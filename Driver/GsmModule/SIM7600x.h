@@ -389,13 +389,13 @@ namespace ES::Driver {
         }
 
         bool activatePdpContext(GsmOperator gsmOperator) {
+            setOperator(gsmOperator);
             if(!checkNetworkRegistration()) {
                 return false;
             }
             if(!enableCgattCgact()) {
                 return false;
             }
-            setOperator(gsmOperator);
             if(!definePdpContext()) {
                 return false;
             }
@@ -408,7 +408,7 @@ namespace ES::Driver {
         }
 
         bool checkNetworkRegistration() {
-            auto status = sendCommand(CregReguest, CregIsOk);
+            auto status = sendCommand(CregReguest, CregIsOk1);
             return status && checkForOk();
         }
 
@@ -416,8 +416,12 @@ namespace ES::Driver {
             bool status = true;
             status &= sendCommand(CgattRequest, CgattIsOk);
             status &= checkForOk();
-
-            status &= sendCommand(CgactRequest, CgactIsOk);
+            if(_gsmOperator == GsmOperator::Tele2) {
+                status &= sendCommand(CgactRequest, CgactIsOk12);
+            }
+            if(_gsmOperator == GsmOperator::Rostelecom) {
+                status &= sendCommand(CgactRequest, CgactIsOk1);
+            }
             status &= checkForOk();
 
             return status;
@@ -431,6 +435,9 @@ namespace ES::Driver {
             auto status = false;
             if(_gsmOperator == GsmOperator::Tele2) {
                 status = sendCommand(CgdcontTele2);
+            }
+            if(_gsmOperator == GsmOperator::Rostelecom) {
+                status = sendCommand(CgdcontRostelecom);
             }
             return status && waitingForOk();
         }
