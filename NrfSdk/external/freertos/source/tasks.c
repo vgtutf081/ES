@@ -2893,6 +2893,7 @@ void vTaskSwitchContext( void )
 
 		/* Select a new task to run using either the generic C or port
 		optimised asm code. */
+
 		taskSELECT_HIGHEST_PRIORITY_TASK();
 		traceTASK_SWITCHED_IN();
 

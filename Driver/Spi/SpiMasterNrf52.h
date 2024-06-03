@@ -5,7 +5,7 @@
 #include "GpioNrf52.h"
 
 namespace ES::Driver {
-
+    template<ISpiMaster::SpiMode blockingMode>
     class SpiMaster : public ISpiMaster {
     enum class State {
         Idle,
@@ -18,7 +18,7 @@ namespace ES::Driver {
             nrf_spim_frequency_t frequency = NRF_SPIM_FREQ_8M,
             nrf_spim_mode_t mode = NRF_SPIM_MODE_0) :
         _spi(spi), _cs({cs}) {
-
+        
         _cs.set();
         _cs.configureOutput();
 
@@ -34,11 +34,20 @@ namespace ES::Driver {
         config.ss_active_high = false;
         config.mode = mode;
 
-        auto status = nrfx_spim_init(&_spi,
-                        &config,
-                        spiEventHandler,
-                        this);
-        asm("nop");
+        bool status;
+
+        if(blockingMode == SpiMode::NonBlocking) {
+            status = nrfx_spim_init(&_spi,
+                &config,
+                spiEventHandler,
+                this);
+        }
+        else if(blockingMode == SpiMode::Blocking) {
+            status = nrfx_spim_init(&_spi,
+                &config,
+                nullptr,
+                this);
+        }
         NRFX_ASSERT(status == NRF_SUCCESS);
     };
 
@@ -47,8 +56,14 @@ namespace ES::Driver {
         nrfx_spim_uninit(&_spi);
     }
 
-    void setEventHandler(ISpiEventHandler* listener) final {
-        _listener = listener;
+    bool setEventHandler(ISpiEventHandler* listener) final {
+        if(blockingMode == SpiMode::Blocking) {
+            return false;
+        }
+        else {
+            _listener = listener;
+        }
+        return true;
     }
 
     static void spiEventHandler(nrfx_spim_evt_t const * p_event, void * p_context){
@@ -69,35 +84,56 @@ namespace ES::Driver {
         readWrite(txBuffer, 0, size);
     }
 
-
     bool readWrite(const uint8_t* txBuffer, uint8_t* rxBuffer, size_t size) {
-        if (_state == State::Transfer) return false;
+        if(blockingMode == SpiMode::NonBlocking) {
+            if (_state == State::Transfer) {
+                return false;
+            } 
+            else if(blockingMode == SpiMode::Blocking) {
+                _state = State::Transfer;
+            }
+        }
         _xferDesc.p_tx_buffer = txBuffer;
         _xferDesc.p_rx_buffer = rxBuffer;
         _xferDesc.tx_length = size;
         _xferDesc.rx_length = size;
         _cs.reset();
-        _state = State::Transfer;
         bool success =  (nrfx_spim_xfer(&_spi, &_xferDesc, 0) == NRFX_SUCCESS);
-        if (!success){
+        if(blockingMode == SpiMode::NonBlocking) {
+            if (!success){
+                _cs.set();
+                _state = State::Idle;
+            }
+        }
+        else if(blockingMode == SpiMode::Blocking) {
             _cs.set();
-            _state = State::Idle;
         }
         return success;
     }
 
     bool readWrite(const uint8_t* txBuffer, uint8_t* rxBuffer, size_t sizeTx, size_t sizeRx) {
-        if (_state == State::Transfer) return false;
+        if(blockingMode == SpiMode::NonBlocking) {
+            if (_state == State::Transfer) {
+                return false;
+            }
+            else if(blockingMode == SpiMode::Blocking) {
+                _state = State::Transfer;
+            }
+        }
         _xferDesc.p_tx_buffer = txBuffer;
         _xferDesc.p_rx_buffer = rxBuffer;
         _xferDesc.tx_length = sizeTx;
         _xferDesc.rx_length = sizeRx;
         _cs.reset();
-        _state = State::Transfer;
-        bool success =  (nrfx_spim_xfer(&_spi, &_xferDesc, 0) == NRFX_SUCCESS);
-        if (!success){
+        bool success = (nrfx_spim_xfer(&_spi, &_xferDesc, 0) == NRFX_SUCCESS);
+        if(blockingMode == SpiMode::NonBlocking) {
+            if (!success){
+                _cs.set();
+                _state = State::Idle;
+            }
+        }
+        else if(blockingMode == SpiMode::Blocking) {
             _cs.set();
-            _state = State::Idle;
         }
         return success;
     }
