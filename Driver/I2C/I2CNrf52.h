@@ -4,6 +4,7 @@
 #include "II2C.h"
 #include "nrfx_twim.h"
 #include "GpioNrf52.h"
+#include "ThreadFreeRtos/ActionLock.h"
 
 namespace ES::Driver::I2C {
 
