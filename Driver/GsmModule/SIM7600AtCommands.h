@@ -56,4 +56,7 @@ namespace ES::Driver {
     const char Ato[] = "ATO";
     const char CgData[] = "AT+CGDATA=\"PPP\",1";
     const char ConnectionPppMode[] = "CONNECT 115200";
+    const char MicMute[] = "AT+CMUT=";
+    const char SpeakerMute[] = "AT+VMUTE=";
+    const char SwitchVoiceChannel[] = "AT+CSDVC=";
 }

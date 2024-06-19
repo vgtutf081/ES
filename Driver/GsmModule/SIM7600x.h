@@ -27,6 +27,17 @@ namespace ES::Driver {
     static constexpr size_t TimeSize = 7;
     static constexpr size_t NumberSize = 12;
 
+    enum class Mute : char {
+        Off = '0',
+        On = '1'
+    };
+
+    enum class VoiceChannel : char {
+        Handset = '1',
+        Headset = '2',
+        SpeakerPhone = '3'
+    };
+
     template<size_t bufferSize>
     class Sim7600x {
     public:
@@ -376,6 +387,27 @@ namespace ES::Driver {
 
         bool answerCall() {
             bool status = sendCommand(AnswerCall);
+            return status;
+        }
+
+        bool setMuteMic(Mute mode) {
+            std::string command (MicMute);
+            command += static_cast<char>(mode);
+            bool status = sendCommand(command.c_str());
+            return status;
+        }
+
+        bool setMuteSpeaker(Mute mode) {
+            std::string command (SpeakerMute);
+            command += static_cast<char>(mode);
+            bool status = sendCommand(command.c_str());
+            return status;
+        }
+
+        bool switchVoiceChannel(VoiceChannel channel) {
+            std::string command (SwitchVoiceChannel);
+            command += static_cast<char>(channel);
+            bool status = sendCommand(command.c_str());
             return status;
         }
 
