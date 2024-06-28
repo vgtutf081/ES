@@ -5,6 +5,7 @@
 #include "nrfx_twim.h"
 #include "GpioNrf52.h"
 #include "ThreadFreeRtos/ActionLock.h"
+#include "ThreadFreeRtos.h"
 
 namespace ES::Driver::I2C {
 
@@ -31,16 +32,10 @@ namespace ES::Driver::I2C {
             ret_code_t ret;
             nrfx_twim_config_t twi_config;
 
-            Gpio::Nrf52Gpio sclPin {_scl};
-            Gpio::Nrf52Gpio sdaPin {_sda};
-            sclPin.configureInput();
-            sdaPin.configureInput();
-            if(!(sclPin.read() && sdaPin.read())) {
-                while(1) {}
-            }
-            sclPin.disable();
-            sdaPin.disable();
-
+            do {
+                reset();
+            } while(!checkPin());
+            
             twi_config.scl                = _scl;
             twi_config.sda                = _sda;
             twi_config.frequency          = _frequency;
@@ -179,6 +174,55 @@ namespace ES::Driver::I2C {
             _acquired = false;
             _transferLock.unlock();
         }
+
+        void reset() {
+            Gpio::Nrf52Gpio sclPin {_scl};
+            Gpio::Nrf52Gpio sdaPin {_sda};
+
+            sclPin.configureOutput(Gpio::DriveMode::PushPull, Gpio::PullMode::Up);
+            sdaPin.configureOutput(Gpio::DriveMode::PushPull, Gpio::PullMode::Up);
+
+            sclPin.reset();
+            Threading::sleepForMs(1);
+            sdaPin.reset();
+            Threading::sleepForMs(1);
+            sclPin.set();
+            Threading::sleepForMs(1);
+            sdaPin.set();
+            Threading::sleepForMs(1);
+
+            for (uint8_t i = 0; i < 21; i++) {// Generate some clock changes to finalize all hunged transactions}
+                sclPin.set();
+                Threading::sleepForMs(1);
+                sclPin.reset();
+                Threading::sleepForMs(1);
+            }
+            sdaPin.reset();
+            Threading::sleepForMs(1);
+            sclPin.set();
+            Threading::sleepForMs(1);
+            sdaPin.set();
+
+            sclPin.disable();
+            sdaPin.disable();
+        }
+
+        bool checkPin() {
+            bool res = true;
+            Gpio::Nrf52Gpio sclPin {_scl};
+            Gpio::Nrf52Gpio sdaPin {_sda};
+            sclPin.configureInput();
+            sdaPin.configureInput();
+
+            if(!(sclPin.read() && sdaPin.read())) {
+                res = false;
+            }
+
+            sclPin.disable();
+            sdaPin.disable();
+            return res;
+        }
+
         bool _acquired = false;
         Threading::ActionLock _transferLock;
 
