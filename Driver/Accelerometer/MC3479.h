@@ -60,84 +60,131 @@ namespace ES::Driver::Accelerometer {
             TimerControl = 0x4A,
             ReadCounter = 0x4B,
         };
+
+        enum class State : uint8_t {
+            Standby = 0,
+            Wake = 1,
+        };
+
+        enum class Rate : uint8_t {
+            Hz50 = 0x08,
+            Hz100 = 0x09,
+            Hz125 = 0x0A,
+            Hz200 = 0x0B,
+            Hz250 = 0x0C,
+            Hz500 = 0x0D,
+            Hz1000 = 0x0E,
+            Hz2000 = 0x0F,
+        };
+
+        enum class Range : uint8_t {
+            g2 = 0,
+            g4 = 1,
+            g8 = 2,
+            g16 = 3,
+            g12 = 4,
+        };
+
+        enum class LPF : uint8_t {
+            IDRdev4255 = 1,
+            IDRdev6 = 2,
+            IDRdev12 = 3,
+            IDRdev16 = 5,
+        };
 #pragma pack(push, 1)
         struct DeviceStatusRegister {
-            bool oneTimeProg : 1;
-            uint8_t reserved2 : 2;
-            bool i2cWatchdog : 1;
-            uint8_t reserved1 : 1;
+            State state : 2;
             bool resolutionMode : 1;
-            uint8_t state : 2;
+            uint8_t reserved1 : 1;
+            bool i2cWatchdog : 1;
+            uint8_t reserved2 : 2;
+            bool oneTimeProg : 1;
         };
 
         struct InterruptEnableRegister {
-            bool generateInterrupt : 1;
-            bool autoClearenable : 1;
-            uint8_t reserved : 1;
-            bool tilt35Enable : 1;
-            bool shakeEnable : 1;
-            bool anyMotionEnable : 1;
-            bool flipEnable : 1;
             bool tiltEnable : 1;
+            bool flipEnable : 1;
+            bool anyMotionEnable : 1;
+            bool shakeEnable : 1;
+            bool tilt35Enable : 1;
+            uint8_t reserved : 1;
+            bool autoClearenable : 1;
+            bool generateInterrupt : 1;
         };
 
         struct ModeRegister {
-            uint8_t reserved : 2;
-            bool watchdogPositive : 1;
-            bool watchdogNegative : 1;
+            State state : 2;
             const uint8_t zero : 2;
-            uint8_t state : 2;
+            bool watchdogNegative : 1;
+            bool watchdogPositive : 1;
+            uint8_t reserved : 2;
         };
 
         struct SampleRateRegister {
+            Rate rate : 5;
             uint8_t zero : 3;
-            uint8_t rate : 5;
         };
 
         struct MotionControlRegister {
-            bool motionReset : 1;
-            bool rawDataFiltering : 1;
-            bool zAxisOrientation : 1;
-            bool tilt35Enable : 1;
-            bool shakeEnable : 1;
-            bool anyMotionEnable : 1;
-            bool motionLatch : 1;
             bool tiltFlipEnable : 1;
+            bool motionLatch : 1;
+            bool anyMotionEnable : 1;
+            bool shakeEnable : 1;
+            bool tilt35Enable : 1;
+            bool zAxisOrientation : 1;
+            bool rawDataFiltering : 1;
+            bool motionReset : 1;
         };
 
         struct FIFOStatusRegister {
-            uint8_t reserved : 5;
-            bool fifoThreshold : 1;
-            bool fifoFull : 1;
             bool fifoEmpty : 1;
+            bool fifoFull : 1;
+            bool fifoThreshold : 1;
+            uint8_t reserved : 5;
         };
 
         struct DataAccelerometer {
-            int16_t zData;
-            int16_t yData;
             int16_t xData;
+            int16_t yData;
+            int16_t zData;
         };
 
         struct StatusRegister {
-            bool newData : 1;
-            uint8_t reserved : 1;
-            bool fifoFlag : 1;
-            bool tilt35flag : 1;
-            bool shakeFlag : 1;
-            bool anyMotionFlag : 1;
-            bool flipFlag : 1;
             bool tiltFlag : 1;
+            bool flipFlag : 1;
+            bool anyMotionFlag : 1;
+            bool shakeFlag : 1;
+            bool tilt35flag : 1;
+            bool fifoFlag : 1;
+            uint8_t reserved : 1;
+            bool newData : 1;
         };
 
         struct InterruptStatusRegister {
-            bool generateInterrupt : 1;
-            uint8_t reserved : 1;
-            bool fifoInterrupt : 1;
-            bool tilt35Interrupt : 1;
-            bool shakeInterrupt : 1;
-            bool anyMotionInterrupt : 1;
-            bool flipInterrupt : 1;
             bool tiltInterrupt : 1;
+            bool flipInterrupt : 1;
+            bool anyMotionInterrupt : 1;
+            bool shakeInterrupt : 1;
+            bool tilt35Interrupt : 1;
+            bool fifoInterrupt : 1;
+            uint8_t reserved : 1;
+            bool generateInterrupt : 1;
+        };
+
+        struct RangeSelectorControlRegister {
+            LPF lpf : 3;
+            bool lpfEnable : 1;
+            Range range : 3;
+            uint8_t zero : 1;
+        };
+
+        struct AnyMotionThresholdRegister {
+            uint16_t threshold : 15;
+            uint8_t reserved : 1;
+        };
+
+        struct AnyMotionDebounceRegister {
+            uint8_t debounce;
         };
 #pragma pack(pop)        
 
@@ -155,6 +202,32 @@ namespace ES::Driver::Accelerometer {
             }
         }
 
+        double getLSB(Range range) {
+            double lsb;
+            switch (range)
+            {
+            case Range::g2:
+                lsb = 0.061;
+                break;
+            case Range::g4:
+                lsb = 0.122;
+                break;
+            case Range::g8:
+                lsb = 0.244;
+                break;
+            case Range::g16:
+                lsb = 0.488;
+                break;
+            case Range::g12:
+                lsb = 0.366;
+                break;
+            
+            default:
+                break;
+            }
+            return lsb / 100;
+        }
+
         DeviceStatusRegister* readDeviceStatusRegister() {
             return readReg<DeviceStatusRegister>(Registers::DeviceStatus);
         }
@@ -169,18 +242,22 @@ namespace ES::Driver::Accelerometer {
 
         void wake() {
             auto mode = readMode();
-            mode->state = 1;
+            mode->state = State::Wake;
             writeMode(*mode);
         }
 
         void standby() {
             auto mode = readMode();
-            mode->state = 0;
+            mode->state = State::Standby;
             writeMode(*mode);
         }
 
         void writeInterruptEnable(InterruptEnableRegister reg) {
             writeReg(reg, Registers::InterruptEnable);
+        }
+
+        InterruptEnableRegister* readInterruptEnable() {
+            return readReg<InterruptEnableRegister>(Registers::InterruptEnable);
         }
 
         void writeMotionControl(MotionControlRegister reg) {
@@ -201,6 +278,24 @@ namespace ES::Driver::Accelerometer {
 
         void writeInterruptStatus(InterruptStatusRegister reg) {
             writeReg(reg, Registers::InterruptStatus);
+        }
+
+        void writeRangeSelectorControlRegister(RangeSelectorControlRegister reg) {
+            reg.zero = 0;
+            writeReg(reg, Registers::RangeSelectorControl);
+        }
+
+        void writeAnyMotionThresholdRegister(AnyMotionThresholdRegister reg) {
+            writeReg(reg, Registers::AnyMotionThresholdLSB);
+        }
+
+        void writeAnyMotionDebounceRegister(AnyMotionDebounceRegister reg) {
+            writeReg(reg, Registers::AnyMotionDebounce);
+        }
+
+        void writeSampleRateRegister(SampleRateRegister reg) {
+            reg.zero = 0;
+            writeReg(reg, Registers::SampleRate);
         }
 
     protected:
